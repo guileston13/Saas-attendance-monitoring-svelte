@@ -1,0 +1,34 @@
+# Node.js
+node_modules/
+dist/
+.build/
+.env
+.env.*
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# SvelteKit
+.svelte-kit/
+
+# Vite
+.vite/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Ignore documentation and SQL files
+*.md
+*.sql
+!school_management.sql
+
+# Misc
+coverage/
+

@@ -1,0 +1,11 @@
+# requirements.txt for face recognition attendance SvelteKit project (Node.js backend)
+# This file is for Python dependencies only. If you use Node.js, use package.json for JS deps.
+
+# If you use Python for face recognition backend, add these:
+face-recognition
+opencv-python
+numpy
+Pillow
+
+# If you use face-api.js and SvelteKit only (Node.js), requirements.txt is not needed.
+# For Node.js, see package.json for dependencies like face-api.js, svelte, vite, etc.
