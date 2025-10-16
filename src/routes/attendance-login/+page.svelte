@@ -5,6 +5,8 @@
   let showForm = false;
   let showFacePage = false;
   let showLoginPage = false;
+  let showSettingsAuth = false;
+  let showSettingsPage = false;
 
   // QR scanner
   let scannerActive = false;
@@ -40,7 +42,28 @@
   let detectionInterval;
   let loginImageUrl = "";
 
-  const SERVER_URL = "/attendance-login/api";
+  // Settings 🔧
+  // for authentication
+  let settingsUser = "";
+  let settingsPass = "";
+  let settingsError = "";
+  // 🌐 Settings values
+  let deviceName = "";
+  let selectedSubject = "";
+  let SERVER_URL = "/attendance-login/api";
+  let subjectList = [];
+  let roomList = [];
+  if (typeof window !== "undefined") {
+    deviceName = localStorage.getItem("deviceName") || "";
+    selectedSubject = localStorage.getItem("selectedSubject") || "";
+    SERVER_URL = localStorage.getItem("SERVER_URL") || "/attendance-login/api";
+  }
+
+  $: if (typeof window !== "undefined") {
+    localStorage.setItem("deviceName", deviceName);
+    localStorage.setItem("selectedSubject", selectedSubject);
+    localStorage.setItem("SERVER_URL", SERVER_URL);
+  }
 
   // On mount: auto-select EMEET USB webcam
   onMount(async () => {
@@ -61,6 +84,36 @@
       selectedCamera = cameras[0]?.deviceId || "";
       faceCamera = selectedCamera;
       console.warn("⚠ EMEET camera not found, using default:", cameras[0]?.label);
+    }
+
+    // Fetch room list from API
+    try {
+      const res = await fetch("/attendance-login/api/rooms");
+      const data = await res.json();
+      if (data.rooms) {
+        roomList = data.rooms;
+        // If deviceName is not set, default to first room
+        if (!deviceName && roomList.length > 0) {
+          deviceName = roomList[0].RoomName;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch rooms", e);
+    }
+
+    // Fetch subject list from API
+    try {
+      const res = await fetch("/attendance-login/api/subjects");
+      const data = await res.json();
+      if (data.subjects) {
+        subjectList = data.subjects;
+        // If selectedSubject is not set, default to first subject
+        if (!selectedSubject && subjectList.length > 0) {
+          selectedSubject = subjectList[0].SubjectName;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch subjects", e);
     }
   });
 
@@ -472,37 +525,20 @@
     const imageData = loginCanvas.toDataURL("image/png");
 
     try {
-      const res = await fetch(`${SERVER_URL}/check-face`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageData })
-      });
-
-      const data = await res.json();
-
-      if (data.orientation && data.orientation !== "none") {
-        clearInterval(detectionInterval);
-        await sendForRecognition(imageData);
-      }
-    } catch (err) {
-      console.error("Detection error:", err);
-    }
-  }
-  async function sendForRecognition(imageData) {
-    try {
       const res = await fetch(`${SERVER_URL}/login-recognize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageData })
+        body: JSON.stringify({ image: imageData, deviceName, selectedSubject })
       });
 
       const data = await res.json();
 
+      // Directly set the recognition result
       loginMessage = data.message;
       loginMessageColor = data.message && data.message.includes("Welcome") ? "green" : "red";
-      loginImageUrl = data.imageUrl || ""; // 👈 save thumbnail URL
+      loginImageUrl = data.imageUrl || "";
 
-      stopLoginCamera();
+      // Keep camera running for continuous recognition
     } catch (err) {
       console.error("Recognition error:", err);
       loginMessage = "❌ Error during recognition";
@@ -511,7 +547,6 @@
       stopLoginCamera();
     }
   }
-
   function stopLoginCamera() {
     if (detectionInterval) {
       clearInterval(detectionInterval);
@@ -524,10 +559,32 @@
     if (loginVideo) loginVideo.srcObject = null;
   }
 
+  function saveDeviceName() {
+    localStorage.setItem("deviceName", deviceName);
+    alert("✅ Device name saved!");
+  }
+  function openSettingsAuth() {
+    showSettingsAuth = true;
+  }
+  function checkSettingsLogin() {
+    const validUser = "admin";
+    const validPass = "1234";
+    if (settingsUser === validUser && settingsPass === validPass) {
+      showSettingsAuth = false;
+      showSettingsPage = true;
+      settingsError = "";
+    } else {
+      settingsError = "Invalid username or password";
+    }
+  }
+  function closeSettings() {
+    showSettingsPage = false;
+  }
+
 </script>
 
 <div class="screen">
-  {#if !showForm && !showFacePage && !showLoginPage}
+  {#if !showForm && !showFacePage && !showLoginPage && !showSettingsAuth && !showSettingsPage}
     <div class="main-buttons">
       <button class="big-btn" on:click={() => { showLoginPage = true; startLoginCamera(); }}>
         Login
@@ -539,6 +596,10 @@
         Register
       </button>
     </div>
+
+    <button class="settings-btn" on:click={openSettingsAuth}>
+      <span class="gear">⚙️</span>
+    </button>
   {/if}
 
   {#if showForm}
@@ -562,6 +623,15 @@
       <label>
         Student ID:
         <input type="text" bind:value={studentId} required />
+      </label>
+
+      <label>
+        Device Name:
+        <select bind:value={deviceName}>
+          {#each roomList as room}
+            <option value={room.RoomName}>{room.RoomName}</option>
+          {/each}
+        </select>
       </label>
 
       <div class="actions">
@@ -625,9 +695,9 @@
 
       <!-- 👇 Result message + thumbnail -->
       {#if loginMessage}
-        <div style="margin-top: 1rem; font-weight: bold; color: {loginMessageColor}; display:flex; align-items:center; gap:10px;">
+        <div style="margin-top: 1rem; font-weight: bold; color: {loginMessageColor}; display:flex; align-items:center; gap:10px; font-size: 1.5rem; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 10px; border: 2px solid {loginMessageColor};">
           {#if loginImageUrl}
-            <img src={loginImageUrl} alt="Recognized face" style="width:60px; height:60px; border-radius:8px; object-fit:cover; border:2px solid {loginMessageColor};" />
+            <img src={loginImageUrl} alt="Recognized face" style="width:80px; height:80px; border-radius:8px; object-fit:cover; border:3px solid {loginMessageColor};" />
           {/if}
           <span>{loginMessage}</span>
         </div>
@@ -635,18 +705,46 @@
     </div>
   {/if}
 
-  {#if loginMessage}
-    <div class="login-result">
-      {#if loginImageUrl}
-        <img
-          src={loginImageUrl}
-          alt="Recognized face"
-          style="border-color: {loginMessageColor};"
-        />
+  {#if showSettingsAuth}
+    <div class="settings-auth">
+      <h2>Settings Login</h2>
+      <input type="text" placeholder="Username" bind:value={settingsUser} />
+      <input type="password" placeholder="Password" bind:value={settingsPass} />
+      {#if settingsError}
+        <p style="color:red;">{settingsError}</p>
       {/if}
-      <span class="login-message" style="color: {loginMessageColor};">
-        {loginMessage}
-      </span>
+      <div class="actions">
+        <button on:click={checkSettingsLogin}>Enter</button>
+        <button on:click={() => showSettingsAuth = false}>Cancel</button>
+      </div>
+    </div>
+  {/if}
+
+  {#if showSettingsPage}
+    <div class="settings-page">
+      <h2>⚙ Settings</h2>
+      <p>Here you can configure admin or system settings.</p>
+      <label>
+        Device Name:
+        <select bind:value={deviceName}>
+          {#each roomList as room}
+            <option value={room.RoomID}>{room.RoomName}</option>
+          {/each}
+        </select>
+      </label>
+      <label>
+        Subject:
+        <select bind:value={selectedSubject}>
+          {#each subjectList as subject}
+            <option value={subject.SubjectID}>{subject.SubjectName}</option>
+          {/each}
+        </select>
+      </label>
+      <label>
+        Server URL:
+        <input type="text" bind:value={SERVER_URL} />
+      </label>
+      <button on:click={closeSettings}>Back</button>
     </div>
   {/if}
 
@@ -693,6 +791,15 @@
     font-size: 1.2rem;
     border: 1px solid #ccc;
     border-radius: 8px;
+  }
+
+  select {
+    padding: 12px;
+    font-size: 1.2rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
   }
 
   .actions {
@@ -794,18 +901,22 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    background: rgba(255,255,255,0.9);
+    padding: 15px;
+    border-radius: 10px;
+    border: 2px solid green;
   }
 
   .login-result img {
-    width: 60px;
-    height: 60px;
+    width: 80px;
+    height: 80px;
     border-radius: 8px;
     object-fit: cover;
-    border: 2px solid #ccc;
+    border: 3px solid #ccc;
   }
 
   .login-message {
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     font-weight: bold;
   }
 
@@ -820,4 +931,65 @@
     border-radius: 8px;
   }
 
+  .settings-auth, .settings-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 400px;
+    background: #fff;
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    margin-top: 2rem;
+  }
+  .settings-auth input {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    font-size: 1rem;
+  }
+  .settings-page input {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    margin-top: 0.5rem;
+  }
+  .settings-page label {
+    width: 100%;
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+  }
+  .settings-btn {
+    position: absolute;
+    bottom: 200px; 
+    right: 30px;        
+    width: 50px;
+    height: 50px;
+    font-size: 1.6rem;
+    border: none;
+    border-radius: 50%;
+    background-color: #444;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+    transition: background 0.2s, transform 0.2s;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    line-height: 1;
+    padding: 0; 
+    touch-action: manipulation;
+  }
+  .settings-btn:hover {
+    background-color: #222;
+    transform: rotate(30deg);
+  }
+  .gear {
+    display: inline-block;
+    transform: translate(1px, 0px);
+  }
 </style>
