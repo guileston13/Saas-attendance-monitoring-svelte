@@ -182,7 +182,7 @@ export async function handleLoginRecognize(request) {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
-    
+    }
     
     const queryDescriptor = detection.descriptor;
     let bestMatch = null;

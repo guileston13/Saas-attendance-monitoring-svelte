@@ -872,7 +872,7 @@
         </p>
       {/if}
     </div>
-  {/if
+  {/if}
 
   {#if showLoginPage}
     <div class="login-page">
