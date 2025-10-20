@@ -874,7 +874,7 @@
     </div>
   {/if}
 
-  {#if showLoginPage}
+  {#if showLoginPage
     <div class="login-page">
       <h2>Login with Face Recognition</h2>
       <!-- svelte-ignore a11y_media_has_caption -->
