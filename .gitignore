@@ -23,6 +23,7 @@ Desktop.ini
 .vscode/
 .idea/
 *.swp
+.superdesign/
 
 # Ignore documentation and SQL files
 *.md
@@ -31,4 +32,7 @@ Desktop.ini
 
 # Misc
 coverage/
+
+# Custom ignores
+optimization_complete.txt
 

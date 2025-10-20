@@ -12,6 +12,7 @@
 	$: subjects = data.subjects || [];
 	$: teachers = data.teachers || [];
 	$: statuses = data.statuses || [];
+	$: rooms = data.rooms || [];
 	$: isAdmin = data.session?.role === 'Admin';
 	
 	let showCreateModal = false;
@@ -275,7 +276,10 @@
 	let editSubject = {};
 
 	function openEditSubjectModal(subject) {
-		editSubject = { ...subject };
+		editSubject = { 
+			...subject,
+			RoomID: subject.RoomID || null // Ensure RoomID is set properly, null for no selection
+		};
 		showEditSubjectModal = true;
 	}
 
@@ -292,7 +296,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
 				body: JSON.stringify({
-					Room: editSubject.Room,
+					RoomID: editSubject.RoomID || null,
 					StartTime: editSubject.StartTime,
 					EndTime: editSubject.EndTime,
 					TeacherID: editSubject.TeacherID
@@ -320,168 +324,175 @@
 <div class="sections-page">
 	{#if !selectedSection}
 		<!-- Sections List View -->
-		<div class="page-header">
-			<div>
-				<h1>Sections</h1>
-				<p class="subtitle">Manage class sections, subjects, and student enrollments</p>
+		<div class="sections-container">
+			<div class="page-header">
+				<div class="header-content">
+					<h1>🏫 Sections Management</h1>
+					<p class="subtitle">Manage class sections, subjects, and student enrollments</p>
+				</div>
+				{#if isAdmin}
+					<button class="btn btn-primary" on:click={openCreateModal}>
+						➕ Create Section
+					</button>
+				{/if}
 			</div>
-			{#if isAdmin}
-				<button class="btn btn-primary" on:click={openCreateModal}>
-					Create Section
-				</button>
+			
+			{#if data.error}
+				<div class="error-message">{data.error}</div>
 			{/if}
-		</div>
-		
-		{#if data.error}
-			<div class="error-message mb-2">{data.error}</div>
-		{/if}
-		
-		<div class="sections-grid">
-			{#each sections as section}
-				<div class="section-card" on:click={() => selectSection(section.SectionID)}>
-					<div class="card-header">
-						<h3>{section.SectionName}</h3>
-						<span 
-							class="status-badge" 
-							style="background-color: {getStatusColor(section.StatusName)}"
-						>
-							{section.StatusName || 'Active'}
-						</span>
-					</div>
-					<div class="card-stats">
-						<div class="stat">
-							<span class="stat-number">{section.SubjectCount || 0}</span>
-							<span class="stat-label">Subjects</span>
-						</div>
-						<div class="stat">
-							<span class="stat-number">{section.TotalStudents || 0}</span>
-							<span class="stat-label">Students</span>
-						</div>
-					</div>
-					<div class="card-footer">
-						<small>Created: {formatDate(section.CreatedAt)}</small>
-						{#if isAdmin}
-							<div class="card-actions" on:click|stopPropagation>
-								<button 
-									class="btn btn-small btn-secondary" 
-									on:click={() => editSection(section)}
+			
+			<div class="sections-grid">
+				{#each sections as section}
+					<div class="section-card-item" on:click={() => selectSection(section.SectionID)}>
+						<div class="card-header">
+							<div class="card-title-section">
+								<h3>{section.SectionName}</h3>
+								<span 
+									class="status-badge" 
+									style="background-color: {getStatusColor(section.StatusName)}"
 								>
-									Edit
-								</button>
+									{section.StatusName || 'Active'}
+								</span>
 							</div>
+						</div>
+						<div class="card-stats">
+							<div class="stat">
+								<span class="stat-number">{section.SubjectCount || 0}</span>
+								<span class="stat-label">📚 Subjects</span>
+							</div>
+							<div class="stat">
+								<span class="stat-number">{section.TotalStudents || 0}</span>
+								<span class="stat-label">👥 Students</span>
+							</div>
+						</div>
+						<div class="card-footer">
+							<small>Created: {formatDate(section.CreatedAt)}</small>
+							{#if isAdmin}
+								<div class="card-actions" on:click|stopPropagation>
+									<button 
+										class="btn btn-secondary"
+										on:click={() => editSection(section)}
+									>
+										Edit
+									</button>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{:else}
+					<div class="empty-state">
+						<div class="empty-icon">🏫</div>
+						<h3>No sections found</h3>
+						<p>Get started by creating your first section.</p>
+						{#if isAdmin}
+							<button class="btn btn-primary" on:click={openCreateModal}>
+								➕ Create Section
+							</button>
 						{/if}
 					</div>
-				</div>
-			{:else}
-				<div class="empty-state">
-					<h3>No sections found</h3>
-					<p>Get started by creating your first section.</p>
-					{#if isAdmin}
-						<button class="btn btn-primary" on:click={openCreateModal}>
-							Create Section
-						</button>
-					{/if}
-				</div>
-			{/each}
+				{/each}
+			</div>
 		</div>
 		
 	{:else}
 		<!-- Section Detail View -->
-		<div class="page-header">
-			<div>
-				<button class="btn btn-secondary back-btn" on:click={goBack}>
-					← Back to Sections
-				</button>
-				<h1>{selectedSection.SectionName}</h1>
-				<p class="subtitle">Manage subjects and student enrollments</p>
-			</div>
-			{#if isAdmin}
-				<button class="btn btn-primary" on:click={openSubjectModal}>
-					Add Subject
-				</button>
-			{/if}
-		</div>
-		
-		<div class="card">
-			<div class="card-header">
-				<h3 class="card-title">Subjects in {selectedSection.SectionName}</h3>
+		<div class="section-detail-container">
+			<div class="page-header">
+				<div class="header-content">
+					<button class="btn btn-secondary back-btn" on:click={goBack}>
+						← Back to Sections
+					</button>
+					<h1>📋 {selectedSection.SectionName}</h1>
+					<p class="subtitle">Manage subjects and student enrollments</p>
+				</div>
+				{#if isAdmin}
+					<button class="btn btn-primary" on:click={openSubjectModal}>
+						➕ Add Subject
+					</button>
+				{/if}
 			</div>
 			
-			<div class="table-container">
-				<table>
-					<thead>
-						<tr>
-							<th>Subject Name</th>
-							<th>Students Enrolled</th>
-							<th>Teacher</th>
-							<th>Schedule</th>
-							<th>Room</th>
-							{#if isAdmin}
-								<th></th>
-							{/if}
-						</tr>
-					</thead>
-					<tbody>
-						{#each sectionSubjects as subject}
+			<div class="section-card">
+				<div class="card-header">
+					<h3 class="card-title">📚 Subjects in {selectedSection.SectionName}</h3>
+				</div>
+				
+				<div class="table-container">
+					<table class="data-table">
+						<thead>
 							<tr>
-								<td>
-									<div class="subject-info">
-										<strong>{subject.SubjectName}</strong>
-										<small class="subject-code">{subject.SubjectCode}</small>
-									</div>
-								</td>
-								<td>
-									<button 
-										class="student-count-btn" 
-										on:click={() => openStudentModal(subject)}
-									>
-										{subject.EnrolledStudents} students
-									</button>
-								</td>
-								<td>{subject.TeacherName || 'No teacher assigned'}</td>
-								<td>
-									<div class="schedule-info">
-										<div class="time-display">
-											{subject.StartTime ? formatTime(subject.StartTime) : 'TBD'}
-											<span class="time-separator">-</span>
-											{subject.EndTime ? formatTime(subject.EndTime) : 'TBD'}
-										</div>
-									</div>
-								</td>
-								<td>{subject.Room || 'Not yet assigned Room'}</td>
+								<th>Subject Name</th>
+								<th>Students Enrolled</th>
+								<th>Teacher</th>
+								<th>Schedule</th>
+								<th>Room</th>
 								{#if isAdmin}
-									<td>
-										<div class="actions">
-											<button 
-												class="btn btn-small btn-primary"
-												on:click={() => openEditSubjectModal(subject)}
-											>
-												Edit
-											</button>
-											<button 
-												class="btn btn-small btn-danger"
-												on:click={() => {
-													if (confirm('Remove this subject from the section?')) {
-														// Handle remove subject
-														console.log('Remove subject', subject.SubjectID);
-													}
-												}}
-											>
-												Remove
-											</button>
-										</div>
-									</td>
+									<th>Actions</th>
 								{/if}
 							</tr>
-						{:else}
-							<tr>
-								<td colspan="{isAdmin ? 6 : 5}" class="text-center">
-									No subjects assigned to this section
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{#each sectionSubjects as subject}
+								<tr>
+									<td>
+										<div class="subject-info">
+											<strong>{subject.SubjectName}</strong>
+											<small class="subject-code">{subject.SubjectCode}</small>
+										</div>
+									</td>
+									<td>
+										<button 
+											class="btn btn-secondary student-count-btn" 
+											on:click={() => openStudentModal(subject)}
+										>
+											👥 {subject.EnrolledStudents} students
+										</button>
+									</td>
+									<td>{subject.TeacherName || 'No teacher assigned'}</td>
+									<td>
+										<div class="schedule-info">
+											<div class="time-display">
+												{subject.StartTime ? formatTime(subject.StartTime) : 'TBD'}
+												<span class="time-separator">-</span>
+												{subject.EndTime ? formatTime(subject.EndTime) : 'TBD'}
+											</div>
+										</div>
+									</td>
+									<td>{subject.RoomName || 'Not assigned'}</td>
+									{#if isAdmin}
+										<td>
+											<div class="actions">
+												<button 
+													class="btn btn-primary"
+													on:click={() => openEditSubjectModal(subject)}
+												>
+													Edit
+												</button>
+												<button 
+													class="btn btn-danger"
+													on:click={() => {
+														if (confirm('Remove this subject from the section?')) {
+															// Handle remove subject
+															console.log('Remove subject', subject.SubjectID);
+														}
+													}}
+												>
+													Remove
+												</button>
+											</div>
+										</td>
+									{/if}
+								</tr>
+							{:else}
+								<tr>
+									<td colspan="{isAdmin ? 6 : 5}" class="text-center">
+										No subjects assigned to this section
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -497,7 +508,12 @@
 			<form on:submit|preventDefault={submitEditSubject}>
 				<div class="form-group">
 					<label for="editRoom">Room:</label>
-					<input id="editRoom" type="text" bind:value={editSubject.Room} placeholder="Room name or number" />
+					<select id="editRoom" bind:value={editSubject.RoomID}>
+						<option value={null}>No room assigned</option>
+						{#each rooms as room}
+							<option value={room.RoomID}>{room.RoomName}</option>
+						{/each}
+					</select>
 				</div>
 				<div class="form-group">
 					<label for="editStartTime">Start Time:</label>
@@ -745,63 +761,160 @@
 
 <style>
 	.sections-page {
-		max-width: 1200px;
+		max-width: 1400px;
 		margin: 0 auto;
+		padding: 1rem;
 	}
 	
+	/* Page Header */
 	.page-header {
+		background: linear-gradient(135deg, #3498db, #2980b9);
+		color: white;
+		padding: 2rem;
+		border-radius: 12px;
+		margin-bottom: 2rem;
+		box-shadow: 0 4px 20px rgba(0,0,0,0.1);
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 2rem;
 		flex-wrap: wrap;
 		gap: 1rem;
 	}
 	
-	.back-btn {
-		margin-bottom: 0.5rem;
+	.page-header h1 {
+		margin: 0 0 0.5rem 0;
+		font-size: 2rem;
 	}
 	
 	.subtitle {
-		color: #7f8c8d;
-		margin: 0.5rem 0 0 0;
+		margin: 0;
+		opacity: 0.9;
 		font-size: 1.1rem;
 	}
 	
-	.sections-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-		gap: 1.5rem;
-	}
-	
-	.section-card {
+	/* Section Detail Container */
+	.section-detail-container {
 		background: white;
-		border-radius: 8px;
-		padding: 1.5rem;
-		box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-		cursor: pointer;
-		transition: transform 0.2s, box-shadow 0.2s;
+		border-radius: 12px;
+		box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+		overflow: hidden;
+		margin-bottom: 2rem;
 	}
 	
-	.section-card:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+	/* Cards */
+	.section-card, .stats-card {
+		background: white;
+		border-radius: 12px;
+		box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+		overflow: hidden;
+		margin-bottom: 2rem;
 	}
 	
 	.card-header {
+		background: linear-gradient(135deg, #27ae60, #2ecc71);
+		color: white;
+		padding: 1.5rem 2rem;
+	}
+	
+	.card-title {
+		margin: 0;
+		font-size: 1.5rem;
+		font-weight: 600;
+	}
+	
+	.card-content {
+		padding: 2rem;
+	}
+	
+	/* Stats Grid */
+	.stats-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		gap: 1.5rem;
+		margin-bottom: 2rem;
+	}
+	
+	.stat-card {
+		background: white;
+		border-radius: 12px;
+		padding: 1.5rem;
+		text-align: center;
+		transition: all 0.3s ease;
+		border: 2px solid #ecf0f1;
+	}
+	
+	.stat-card:hover {
+		transform: translateY(-4px);
+		box-shadow: 0 8px 25px rgba(39, 174, 96, 0.15);
+		border-color: #27ae60;
+	}
+	
+	.stat-icon {
+		font-size: 2.5rem;
+		margin-bottom: 1rem;
+	}
+	
+	.stat-number {
+		display: block;
+		font-size: 2.5rem;
+		font-weight: bold;
+		color: #2c3e50;
+		margin-bottom: 0.5rem;
+	}
+	
+	.stat-label {
+		color: #7f8c8d;
+		font-size: 1.1rem;
+		font-weight: 500;
+	}
+	
+	/* Sections Grid */
+	.sections-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+		gap: 1.5rem;
+	}
+	
+	.section-card-item {
+		background: white;
+		border: 2px solid #ecf0f1;
+		border-radius: 12px;
+		padding: 1.5rem;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		text-align: center;
+	}
+	
+	.section-card-item:hover {
+		border-color: #3498db;
+		transform: translateY(-4px);
+		box-shadow: 0 8px 25px rgba(52, 152, 219, 0.15);
+	}
+	
+	.card-title-section {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 1rem;
 	}
 	
-	.card-header h3 {
+	.card-title-section h3 {
 		margin: 0;
 		color: #2c3e50;
+		font-size: 1.3rem;
+	}
+	
+	.status-badge {
+		padding: 0.25rem 0.75rem;
+		border-radius: 20px;
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: white;
 	}
 	
 	.card-stats {
 		display: flex;
+		justify-content: center;
 		gap: 2rem;
 		margin-bottom: 1rem;
 	}
@@ -837,45 +950,176 @@
 		gap: 0.5rem;
 	}
 	
-	.status-badge {
-		padding: 0.2rem 0.6rem;
-		border-radius: 12px;
-		font-size: 0.8rem;
-		font-weight: bold;
-		color: white;
+	/* Table Styles */
+	.table-container {
+		padding: 2rem;
 	}
 	
+	.data-table {
+		width: 100%;
+		border-collapse: collapse;
+		background: white;
+		border-radius: 8px;
+		overflow: hidden;
+		box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+	}
+	
+	.data-table th {
+		background: #34495e;
+		color: white;
+		padding: 1rem 0.75rem;
+		text-align: left;
+		font-weight: 500;
+		border: 1px solid #2c3e50;
+	}
+	
+	.data-table td {
+		padding: 1rem 0.75rem;
+		border: 1px solid #ecf0f1;
+	}
+	
+	.data-table tbody tr:hover {
+		background: #f8f9fa;
+	}
+	
+	.text-center {
+		text-align: center;
+	}
+	
+	/* Subject Info */
 	.subject-info {
 		display: flex;
 		flex-direction: column;
+		gap: 0.25rem;
+	}
+	
+	.subject-info strong {
+		color: #2c3e50;
+		font-size: 1rem;
 	}
 	
 	.subject-code {
 		color: #7f8c8d;
-		font-size: 0.8rem;
+		font-size: 0.85rem;
+		font-weight: normal;
 	}
 	
-	.student-count-btn {
-		background: none;
-		border: none;
-		color: #3498db;
-		text-decoration: underline;
-		cursor: pointer;
-		font-size: inherit;
+	/* Schedule Info */
+	.schedule-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
 	}
 	
-	.student-count-btn:hover {
-		color: #2980b9;
+	.time-display {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-family: monospace;
+		font-size: 0.9rem;
+		color: #2c3e50;
 	}
 	
+	.time-separator {
+		color: #7f8c8d;
+	}
+	
+	/* Actions */
 	.actions {
 		display: flex;
 		gap: 0.5rem;
 		flex-wrap: wrap;
 	}
 	
+	/* Buttons */
+	.btn {
+		padding: 0.75rem 1.5rem;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 1rem;
+		font-weight: 500;
+		transition: all 0.2s ease;
+		text-decoration: none;
+		display: inline-block;
+	}
+	
+	.btn-primary {
+		background: #3498db;
+		color: white;
+	}
+	
+	.btn-primary:hover {
+		background: #2980b9;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+	}
+	
+	.btn-secondary {
+		background: #6c757d;
+		color: white;
+	}
+	
+	.btn-secondary:hover {
+		background: #545b62;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+	}
+	
+	.btn-danger {
+		background: #e74c3c;
+		color: white;
+	}
+	
+	.btn-danger:hover {
+		background: #c0392b;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+	}
+	
+	.btn-success {
+		background: #27ae60;
+		color: white;
+	}
+	
+	.btn-success:hover {
+		background: #229954;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+	}
+	
+	/* Student Count Button */
+	.student-count-btn {
+		background: #f8f9fa;
+		color: #3498db;
+		border: 1px solid #3498db;
+		padding: 0.5rem 1rem;
+		border-radius: 20px;
+		font-size: 0.9rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+	
+	.student-count-btn:hover {
+		background: #3498db;
+		color: white;
+		transform: translateY(-1px);
+	}
+	
+	/* Back Button */
+	.back-btn {
+		background: rgba(255,255,255,0.2);
+		color: white;
+		border: 1px solid rgba(255,255,255,0.3);
+	}
+	
+	.back-btn:hover {
+		background: rgba(255,255,255,0.3);
+		transform: translateY(-1px);
+	}
+	
+	/* Empty State */
 	.empty-state {
-		grid-column: 1 / -1;
 		text-align: center;
 		padding: 3rem;
 		color: #7f8c8d;
@@ -886,6 +1130,42 @@
 		color: #2c3e50;
 	}
 	
+	.empty-icon {
+		font-size: 4rem;
+		margin-bottom: 1rem;
+	}
+	
+	/* Loading State */
+	.loading-state {
+		text-align: center;
+		padding: 3rem;
+	}
+	
+	.spinner {
+		width: 40px;
+		height: 40px;
+		border: 4px solid #ecf0f1;
+		border-top: 4px solid #3498db;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+		margin: 0 auto 1rem;
+	}
+	
+	@keyframes spin {
+		0% { transform: rotate(0deg); }
+		100% { transform: rotate(360deg); }
+	}
+	
+	/* Error Message */
+	.error-message {
+		background: #f8d7da;
+		color: #721c24;
+		padding: 1rem;
+		border-radius: 6px;
+		margin-bottom: 1rem;
+		text-align: center;
+	}
+	
 	/* Modal Styles */
 	.modal-overlay {
 		position: fixed;
@@ -893,36 +1173,53 @@
 		left: 0;
 		width: 100%;
 		height: 100%;
-		background: rgba(0, 0, 0, 0.5);
+		background: rgba(0,0,0,0.5);
 		display: flex;
-		justify-content: center;
 		align-items: center;
+		justify-content: center;
 		z-index: 1000;
 	}
 	
 	.modal-content {
 		background: white;
-		border-radius: 8px;
+		border-radius: 12px;
+		padding: 2rem;
+		max-width: 500px;
 		width: 90%;
-		max-width: 800px;
-		max-height: 80vh;
-		overflow: hidden;
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+		max-height: 90vh;
+		overflow-y: auto;
+		box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 	}
 	
 	.modal-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 1.5rem;
+		margin-bottom: 1.5rem;
+		padding-bottom: 1rem;
 		border-bottom: 1px solid #ecf0f1;
-		background: #f8f9fa;
 	}
 	
-	.modal-header h3 {
+	.modal-title {
 		margin: 0;
 		color: #2c3e50;
-		font-size: 1.25rem;
+		font-size: 1.5rem;
+	}
+	
+	.modal-close {
+		background: none;
+		border: none;
+		font-size: 1.5rem;
+		cursor: pointer;
+		color: #7f8c8d;
+		padding: 0.25rem;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+	}
+	
+	.modal-close:hover {
+		background: #f8f9fa;
+		color: #2c3e50;
 	}
 	
 	.close-btn {
@@ -931,231 +1228,117 @@
 		font-size: 1.5rem;
 		cursor: pointer;
 		color: #7f8c8d;
-		padding: 0;
-		width: 30px;
-		height: 30px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: 50%;
-		transition: background-color 0.2s;
+		padding: 0.25rem;
+		border-radius: 4px;
+		transition: all 0.2s ease;
 	}
 	
 	.close-btn:hover {
-		background: #ecf0f1;
+		background: #f8f9fa;
 		color: #2c3e50;
 	}
 	
-	.modal-body {
-		padding: 1.5rem;
-		max-height: 60vh;
-		overflow-y: auto;
-	}
-	
-	.search-container {
-		position: relative;
+	.form-group {
 		margin-bottom: 1.5rem;
 	}
 	
-	.search-input {
+	.form-label {
+		display: block;
+		margin-bottom: 0.5rem;
+		font-weight: 500;
+		color: #2c3e50;
+	}
+	
+	.form-input, .form-select {
 		width: 100%;
-		padding: 0.75rem 2.5rem 0.75rem 1rem;
+		padding: 0.75rem;
 		border: 2px solid #ecf0f1;
 		border-radius: 6px;
 		font-size: 1rem;
-		transition: border-color 0.2s;
+		transition: border-color 0.2s ease;
 	}
 	
-	.search-input:focus {
+	.form-input:focus, .form-select:focus {
 		outline: none;
 		border-color: #3498db;
 	}
 	
-	.search-icon {
-		position: absolute;
-		right: 0.75rem;
-		top: 50%;
-		transform: translateY(-50%);
-		color: #7f8c8d;
-		font-size: 1.2rem;
+	/* Student Modal */
+	.student-modal {
+		max-width: 800px;
 	}
 	
-	.student-lists {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 2rem;
-		margin-bottom: 1rem;
-	}
-	
-	.student-list h4 {
-		margin: 0 0 1rem 0;
-		color: #2c3e50;
-		font-size: 1.1rem;
-		border-bottom: 2px solid #ecf0f1;
-		padding-bottom: 0.5rem;
-	}
-	
-	.student-items {
-		max-height: 300px;
+	.student-list {
+		max-height: 400px;
 		overflow-y: auto;
-		border: 1px solid #ecf0f1;
-		border-radius: 6px;
 	}
 	
 	.student-item {
 		display: flex;
+		justify-content: space-between;
 		align-items: center;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid #f8f9fa;
-		transition: background-color 0.2s;
+		padding: 1rem;
+		border: 1px solid #ecf0f1;
+		border-radius: 6px;
+		margin-bottom: 0.5rem;
+		background: white;
 	}
 	
-	.student-item:last-child {
-		border-bottom: none;
-	}
-	
-	.student-item:hover {
-		background: #f8f9fa;
-	}
-	
-	.student-item input[type="checkbox"] {
-		margin-right: 0.75rem;
-		transform: scale(1.2);
-	}
-	
-	.student-info {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-	}
-	
-	.student-name {
-		font-weight: 500;
+	.student-info h4 {
+		margin: 0 0 0.25rem 0;
 		color: #2c3e50;
-		margin-bottom: 0.25rem;
 	}
 	
-	.student-id {
-		font-size: 0.85rem;
-		color: #7f8c8d;
-	}
-	
-	.student-year {
-		font-size: 0.8rem;
-		color: #95a5a6;
-		font-style: italic;
-	}
-	
-	.no-students {
-		text-align: center;
-		color: #7f8c8d;
-		font-style: italic;
-		padding: 2rem;
+	.student-info p {
 		margin: 0;
+		color: #7f8c8d;
+		font-size: 0.9rem;
 	}
 	
-	.student-item.enrolled {
-		background: #e8f5e8;
-		border-left: 4px solid #27ae60;
-	}
-	
-	.remove-btn {
-		background: #e74c3c;
-		color: white;
-		border: none;
-		border-radius: 50%;
-		width: 24px;
-		height: 24px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		cursor: pointer;
-		font-size: 0.8rem;
-		transition: background-color 0.2s;
-	}
-	
-	.remove-btn:hover {
-		background: #c0392b;
-	}
-	
-	.selection-summary {
-		background: #ecf0f1;
-		padding: 0.75rem 1rem;
-		border-radius: 6px;
-		margin-top: 1rem;
-		text-align: center;
-		font-weight: 500;
-		color: #2c3e50;
-	}
-	
-	.modal-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 1rem;
-		padding: 1.5rem;
-		border-top: 1px solid #ecf0f1;
-		background: #f8f9fa;
-	}
-	
-	.btn-primary {
-		background: #3498db;
-		color: white;
-		border: none;
-		padding: 0.75rem 1.5rem;
-		border-radius: 6px;
-		font-size: 1rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-	
-	.btn-primary:hover:not(:disabled) {
-		background: #2980b9;
-	}
-	
-	.btn-primary:disabled {
-		background: #bdc3c7;
-		cursor: not-allowed;
-	}
-	
-	.btn-secondary {
-		background: #ecf0f1;
-		color: #2c3e50;
-		border: 1px solid #bdc3c7;
-		padding: 0.75rem 1.5rem;
-		border-radius: 6px;
-		font-size: 1rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s;
-	}
-	
-	.btn-secondary:hover {
-		background: #d5dbdb;
-	}
-	
+	/* Responsive Design */
 	@media (max-width: 768px) {
-		.sections-grid {
-			grid-template-columns: 1fr;
+		.sections-page {
+			padding: 0.5rem;
 		}
 		
 		.page-header {
+			padding: 1.5rem;
 			flex-direction: column;
 			align-items: flex-start;
 		}
 		
-		.card-stats {
+		.page-header h1 {
+			font-size: 1.5rem;
+		}
+		
+		.sections-grid {
+			grid-template-columns: 1fr;
+		}
+		
+		.stats-grid {
+			grid-template-columns: 1fr;
+		}
+		
+		.table-container {
+			padding: 1rem;
+		}
+		
+		.data-table {
+			font-size: 0.9rem;
+		}
+		
+		.actions {
 			flex-direction: column;
-			gap: 1rem;
+		}
+		
+		.btn {
+			width: 100%;
+			margin-bottom: 0.5rem;
 		}
 		
 		.modal-content {
-			width: 95%;
 			margin: 1rem;
-		}
-		
-		.modal-actions {
-			flex-direction: column;
+			padding: 1.5rem;
 		}
 	}
 </style>

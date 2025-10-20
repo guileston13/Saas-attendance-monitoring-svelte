@@ -42,6 +42,14 @@
   let detectionInterval;
   let loginImageUrl = "";
 
+  // 🎯 Smart detection optimization variables
+  let isDetectionPending = false;          // Prevent request queue buildup
+  let consecutiveFailures = 0;              // Track failures for backoff
+  let lastDetectionTime = 0;                // Throttle frames
+  let lastSuccessTime = 0;                  // Track idle state
+  let currentDetectionInterval = 2000;      // Start at 2 seconds (2x better than 500ms)
+  let manualScanMode = false;               // Toggle between auto/manual
+
   // Settings 🔧
   // for authentication
   let settingsUser = "";
@@ -261,6 +269,34 @@
 
     return canvas.toDataURL("image/jpeg");
   }
+
+  // 🎯 IMPROVED: Convert canvas to compressed JPEG for login
+  function takeLoginSnapshot() {
+    loginCanvas.width = loginVideo.videoWidth;
+    loginCanvas.height = loginVideo.videoHeight;
+    loginCtx.drawImage(loginVideo, 0, 0, loginCanvas.width, loginCanvas.height);
+
+    // Return compressed JPEG (60% quality) instead of PNG
+    // JPEG is ~5-10x smaller than PNG
+    return loginCanvas.toDataURL("image/jpeg", 0.6);
+  }
+
+  // 🎯 IMPROVED: Client-side face detection before sending to server
+  async function hasFaceDetected() {
+    // @ts-ignore - faceapi loaded dynamically
+    if (!window.faceapi || !loginVideo || loginVideo.readyState !== 4) {
+      return true; // If faceapi not loaded, allow sending (fallback)
+    }
+
+    try {
+      // @ts-ignore - faceapi loaded dynamically
+      const detection = await window.faceapi.detectSingleFace(loginVideo, new window.faceapi.TinyFaceDetectorOptions());
+      return !!detection; // true if face detected
+    } catch (err) {
+      console.warn("Face detection check error:", err);
+      return true; // Fallback: allow sending if detection fails
+    }
+  }
   async function checkOrientation() {
     const frame = takeSnapshot();
   const res = await fetch(`${SERVER_URL}/check-face`, {
@@ -284,15 +320,67 @@
   async function startScan() {
     try {
       console.log("Starting camera with selectedCamera:", selectedCamera);
-      // use ideal to avoid failing if exact deviceId isn't usable
-      const constraints = {
-        video: {
-          deviceId: faceCamera ? { exact: faceCamera } : { exact: selectedCamera },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+      
+      // 🎯 FIX: Progressive fallback strategy to avoid OverconstrainedError
+      let constraints;
+      let retryCount = 0;
+      let stream;
+      
+      // Try: Exact camera + exact resolution
+      const attemptConfigurations = [
+        {
+          video: {
+            deviceId: faceCamera ? { exact: faceCamera } : { exact: selectedCamera },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        // Fallback: Exact camera, no resolution constraints
+        {
+          video: {
+            deviceId: faceCamera ? { exact: faceCamera } : { exact: selectedCamera }
+          }
+        },
+        // Fallback: Preferred camera (not exact), with resolution
+        {
+          video: {
+            deviceId: faceCamera ? { ideal: faceCamera } : { ideal: selectedCamera },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        // Fallback: Any camera with resolution
+        {
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        // Last resort: Any camera, any resolution
+        {
+          video: true
         }
-      };
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      ];
+      
+      for (let config of attemptConfigurations) {
+        try {
+          console.log(`📹 Attempting camera config (attempt ${retryCount + 1}):`, config);
+          stream = await navigator.mediaDevices.getUserMedia(config);
+          console.log("✅ Camera started successfully with config:", config);
+          break;
+        } catch (err) {
+          retryCount++;
+          console.warn(`⚠️ Config attempt ${retryCount} failed:`, err.name);
+          if (retryCount === attemptConfigurations.length) {
+            throw err; // All attempts failed
+          }
+        }
+      }
+      
+      if (!stream) {
+        throw new Error("Failed to get camera stream");
+      }
+      
       video.srcObject = stream;
       await video.play();
       console.log("Camera started");
@@ -308,7 +396,7 @@
         overlayCanvas.width = video.videoWidth;
         overlayCanvas.height = video.videoHeight;
         overlayCanvas.style.pointerEvents = 'none';
-        overlayCanvas.style.zIndex = 10;
+        overlayCanvas.style.zIndex = "10";
         video.parentNode.insertBefore(overlayCanvas, video.nextSibling);
       }
       overlayCtx = overlayCanvas.getContext('2d');
@@ -327,15 +415,18 @@
   }
 
   async function loadFaceApiModels() {
+    // @ts-ignore - faceapi loaded dynamically
     if (!window.faceapi) {
-      // @ts-ignore
+      // @ts-ignore - faceapi loaded dynamically
       window.faceapi = await import('face-api.js');
     }
     // If you want to use a redirector, set modelUrl to '/facehandle.js' and handle requests in that file.
     // For standard usage, keep models in /static/models and use '/models' as the URL.
     const modelUrl = '/models'; // or '/facehandle.js' for advanced redirect
     await Promise.all([
+      // @ts-ignore
       window.faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
+      // @ts-ignore
       window.faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl)
     ]);
   }
@@ -347,6 +438,7 @@
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
     // Detect face
+    // @ts-ignore
     const detection = await window.faceapi.detectSingleFace(video, new window.faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
     if (detection) {
       const box = detection.detection.box;
@@ -418,7 +510,7 @@
           await new Promise(res => setTimeout(res, 1500)); // pause before next step
         }
 
-        await new Promise(res => setTimeout(res, 500)); // polling interval
+        await new Promise(res => setTimeout(res, 2000)); // polling interval
       }
     }
 
@@ -487,15 +579,47 @@
         d => d.kind === "videoinput" && (d.label || "").toLowerCase().includes("emeet")
       );
 
-      let constraints;
-      if (emeetCam) {
-        constraints = { video: { deviceId: { exact: emeetCam.deviceId } } };
-      } else {
-        console.warn("⚠ EMEET camera not found, falling back to default.");
-        constraints = { video: true };
+      // 🎯 FIX: Progressive fallback strategy to avoid OverconstrainedError
+      const attemptConfigurations = emeetCam
+        ? [
+            // Try: Exact EMEET camera
+            { video: { deviceId: { exact: emeetCam.deviceId } } },
+            // Fallback: Prefer EMEET camera but not strict
+            { video: { deviceId: { ideal: emeetCam.deviceId } } },
+            // Fallback: Any camera with resolution
+            { video: { width: { ideal: 1280 }, height: { ideal: 720 } } },
+            // Last resort: Any camera
+            { video: true }
+          ]
+        : [
+            // No EMEET found, try any camera with resolution
+            { video: { width: { ideal: 1280 }, height: { ideal: 720 } } },
+            // Last resort: Any camera
+            { video: true }
+          ];
+
+      let loginStream;
+      let attemptNum = 0;
+      
+      for (let config of attemptConfigurations) {
+        try {
+          console.log(`📹 Login camera attempt ${attemptNum + 1}:`, config);
+          loginStream = await navigator.mediaDevices.getUserMedia(config);
+          console.log("✅ Login camera started with config:", config);
+          break;
+        } catch (err) {
+          attemptNum++;
+          console.warn(`⚠️ Login camera attempt ${attemptNum} failed:`, err.name);
+          if (attemptNum === attemptConfigurations.length) {
+            throw err; // All attempts failed
+          }
+        }
       }
 
-      loginStream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (!loginStream) {
+        throw new Error("Failed to get login camera stream");
+      }
+
       loginVideo.srcObject = loginStream;
 
       // Play may fail due to autoplay policy — catch but don’t treat as camera error
@@ -505,8 +629,16 @@
 
       loginCtx = loginCanvas.getContext("2d");
 
+      // Reset detection state
+      isDetectionPending = false;
+      consecutiveFailures = 0;
+      lastDetectionTime = 0;
+      lastSuccessTime = Date.now();
+      currentDetectionInterval = 2000;
+
       if (detectionInterval) clearInterval(detectionInterval);
-      detectionInterval = setInterval(sendFrameForDetection, 500);
+      // 🎯 Start with 2 second interval (4x better than 500ms)
+      detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
 
     } catch (err) {
       console.error("Login camera error:", err);
@@ -516,13 +648,42 @@
   }
 
   async function sendFrameForDetection() {
+    // 🎯 GUARD 1: Prevent request queue buildup
+    if (isDetectionPending) {
+      console.log("⏳ Detection already pending, skipping frame...");
+      return;
+    }
+
+    // 🎯 GUARD 2: Throttle frames - don't send if last request was too recent
+    const now = Date.now();
+    if (now - lastDetectionTime < currentDetectionInterval - 100) {
+      return;
+    }
+
+    // 🎯 GUARD 3: Idle timeout - if no success for 60 seconds, stop polling
+    if (now - lastSuccessTime > 60000) {
+      console.log("⏱️ Idle timeout reached (60s), stopping auto-detection");
+      stopLoginCamera();
+      loginMessage = "⏱️ Timeout: No face recognized in 60 seconds";
+      loginMessageColor = "orange";
+      return;
+    }
+
+    // 🎯 GUARD 4: Client-side face detection first
+    const faceDetected = await hasFaceDetected();
+    if (!faceDetected) {
+      console.log("👤 No face detected locally, skipping server request");
+      return;
+    }
+
     if (!loginCtx || !loginVideo.videoWidth) return;
 
-    loginCanvas.width = loginVideo.videoWidth;
-    loginCanvas.height = loginVideo.videoHeight;
-    loginCtx.drawImage(loginVideo, 0, 0, loginCanvas.width, loginCanvas.height);
+    // Mark as pending
+    isDetectionPending = true;
+    lastDetectionTime = now;
 
-    const imageData = loginCanvas.toDataURL("image/png");
+    // 🎯 IMPROVED: Use compressed JPEG instead of PNG
+    const imageData = takeLoginSnapshot();
 
     try {
       const res = await fetch(`${SERVER_URL}/login-recognize`, {
@@ -533,18 +694,45 @@
 
       const data = await res.json();
 
+      // Successfully received response
+      lastSuccessTime = Date.now();
+      consecutiveFailures = 0;
+      currentDetectionInterval = 2000; // Reset to normal interval
+
       // Directly set the recognition result
       loginMessage = data.message;
       loginMessageColor = data.message && data.message.includes("Welcome") ? "green" : "red";
       loginImageUrl = data.imageUrl || "";
 
+      console.log("✅ Recognition response:", data.message);
+
       // Keep camera running for continuous recognition
     } catch (err) {
       console.error("Recognition error:", err);
-      loginMessage = "❌ Error during recognition";
-      loginMessageColor = "red";
+      
+      // 🎯 IMPROVED: Exponential backoff on failures
+      consecutiveFailures++;
+      
+      // Progressive delay: 2s → 4s → 8s → 16s (max)
+      const maxInterval = 16000;
+      currentDetectionInterval = Math.min(2000 * Math.pow(2, consecutiveFailures - 1), maxInterval);
+      
+      console.warn(`⚠️ Failure #${consecutiveFailures}, next interval: ${currentDetectionInterval}ms`);
+
+      // Only show error after multiple failures
+      if (consecutiveFailures > 3) {
+        loginMessage = "❌ Server error. Retrying...";
+        loginMessageColor = "red";
+      }
+
+      // Restart interval with new timing
+      if (detectionInterval) clearInterval(detectionInterval);
+      detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
+      
       loginImageUrl = "";
-      stopLoginCamera();
+    } finally {
+      // Always mark as not pending when done
+      isDetectionPending = false;
     }
   }
   function stopLoginCamera() {
@@ -625,14 +813,14 @@
         <input type="text" bind:value={studentId} required />
       </label>
 
-      <label>
+      <!-- <label>
         Device Name:
         <select bind:value={deviceName}>
           {#each roomList as room}
             <option value={room.RoomName}>{room.RoomName}</option>
           {/each}
         </select>
-      </label>
+      </label> -->
 
       <div class="actions">
         <button type="submit" class="submit-btn">Submit</button>
@@ -692,6 +880,20 @@
       <!-- svelte-ignore a11y_media_has_caption -->
       <video bind:this={loginVideo} autoplay playsinline muted class="border rounded w-96 h-72"></video>
       <canvas bind:this={loginCanvas} style="display:none"></canvas>
+
+      <!-- 🎯 Manual scan button for user control -->
+      <div class="login-actions">
+        <button class="manual-scan-btn" on:click={sendFrameForDetection} title="Manual face scan trigger">
+          📸 Scan Now
+        </button>
+        
+        <button class="back-btn" on:click={() => { 
+          stopLoginCamera(); 
+          showLoginPage = false; 
+        }} title="Go back to main menu">
+          ← Back
+        </button>
+      </div>
 
       <!-- 👇 Result message + thumbnail -->
       {#if loginMessage}
@@ -856,6 +1058,47 @@
     cursor: pointer;
   }
 
+  .manual-scan-btn {
+    margin-top: 1.5rem;
+    background: #0077cc;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.2s;
+  }
+
+  .manual-scan-btn:hover {
+    background: #0055aa;
+  }
+
+  .login-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 1.5rem;
+  }
+
+  .back-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.2s;
+  }
+
+  .back-btn:hover {
+    background: #5a6268;
+  }
+
   .qr-reader {
     width: 100%;
     max-width: 400px;
@@ -897,27 +1140,15 @@
     cursor: pointer;
   }
   .login-result {
-    margin-top: 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: rgba(255,255,255,0.9);
-    padding: 15px;
-    border-radius: 10px;
-    border: 2px solid green;
+    display: none; /* Hidden class - kept for backward compatibility */
   }
 
   .login-result img {
-    width: 80px;
-    height: 80px;
-    border-radius: 8px;
-    object-fit: cover;
-    border: 3px solid #ccc;
+    display: none;
   }
 
   .login-message {
-    font-size: 1.5rem;
-    font-weight: bold;
+    display: none;
   }
 
   video {

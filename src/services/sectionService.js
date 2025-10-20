@@ -60,7 +60,8 @@ export async function getSectionSubjects(sectionId) {
             ss.CreatedAt as AssignedAt,
             ss.StartTime as StartTime,
             ss.EndTime as EndTime,
-            ss.Room as Room
+            ss.RoomID as RoomID,
+            r.RoomName as RoomName
         FROM section_subjects ss
         JOIN subjects sub ON ss.SubjectID = sub.SubjectID
         LEFT JOIN teachers t ON ss.TeacherID = t.TeacherID
@@ -68,9 +69,10 @@ export async function getSectionSubjects(sectionId) {
             AND ss.SubjectID = se.SubjectID 
             AND se.Status = 'Active'
         LEFT JOIN status stat ON sub.StatusID = stat.StatusID
+        LEFT JOIN room r ON ss.RoomID = r.RoomID
         WHERE ss.SectionID = ?
         GROUP BY ss.SectionID, ss.SubjectID, sub.SubjectName, sub.SubjectCode, 
-                 ss.TeacherID, t.FirstName, t.LastName, sub.StatusID, stat.StatusName, ss.CreatedAt, ss.StartTime, ss.EndTime, ss.Room
+                 ss.TeacherID, t.FirstName, t.LastName, sub.StatusID, stat.StatusName, ss.CreatedAt, ss.StartTime, ss.EndTime, ss.RoomID, r.RoomName
         ORDER BY sub.SubjectName
     `, [sectionId]);
     

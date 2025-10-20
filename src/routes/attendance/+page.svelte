@@ -388,9 +388,9 @@
 					<div class="selection-card" on:click={() => selectSection(section.SectionID.toString())}>
 						<div class="card-icon">🏫</div>
 						<h3>{section.SectionName}</h3>
-						<p class="card-subtitle">{section.YearLevel}</p>
+						<!-- <p class="card-subtitle">{section.YearLevel}</p> -->
 						<div class="card-stats">
-							<span class="stat">📚 {availableSubjects.length} Subjects</span>
+							<span class="stat">📚 {section.subjectCount || 0} Subjects</span>
 							<span class="stat">👥 {section.TotalStudents || 0} Students</span>
 						</div>
 					</div>

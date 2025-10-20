@@ -16,7 +16,7 @@ export async function PUT({ request, params }) {
 	try {
 		const sectionId = parseInt(params.id);
 		const subjectId = parseInt(params.subjectId);
-		const { Room, StartTime, EndTime, TeacherID } = await request.json();
+		const { RoomID, StartTime, EndTime, TeacherID } = await request.json();
 
 		if (isNaN(sectionId) || isNaN(subjectId)) {
 			return new Response(JSON.stringify({ error: 'Invalid section or subject ID' }), {
@@ -28,11 +28,11 @@ export async function PUT({ request, params }) {
 		// Update the subject assignment
 		const query = `
 			UPDATE section_subjects
-			SET Room = ?, StartTime = ?, EndTime = ?, TeacherID = ?
+			SET RoomID = ?, StartTime = ?, EndTime = ?, TeacherID = ?
 			WHERE SectionID = ? AND SubjectID = ?
 		`;
 
-		const result = await executeQuery(query, [Room, StartTime, EndTime, TeacherID, sectionId, subjectId]);
+		const result = await executeQuery(query, [RoomID, StartTime, EndTime, TeacherID, sectionId, subjectId]);
 
 		if (result.affectedRows === 0) {
 			return new Response(JSON.stringify({ error: 'Subject assignment not found' }), {

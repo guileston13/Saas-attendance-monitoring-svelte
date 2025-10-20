@@ -22,7 +22,7 @@
 	</div>
 	
 	{#if data.error}
-		<div class="error-message mb-2">{data.error}</div>
+		<div class="error-message">{data.error}</div>
 	{/if}
 	
 	<!-- Admin Dashboard -->
@@ -47,13 +47,13 @@
 		</div>
 		
 		<div class="dashboard-grid">
-			<div class="card">
+			<div class="dashboard-card">
 				<div class="card-header">
-					<h3 class="card-title">Recent Sections</h3>
-					<a href="/sections" class="btn btn-small btn-primary">View All</a>
+					<h3 class="card-title">📋 Recent Sections</h3>
+					<a href="/sections" class="btn btn-primary">View All →</a>
 				</div>
 				<div class="table-container">
-					<table>
+					<table class="data-table">
 						<thead>
 							<tr>
 								<th>Section Name</th>
@@ -74,13 +74,13 @@
 				</div>
 			</div>
 			
-			<div class="card">
+			<div class="dashboard-card">
 				<div class="card-header">
-					<h3 class="card-title">Recent Students</h3>
-					<a href="/students" class="btn btn-small btn-primary">View All</a>
+					<h3 class="card-title">👥 Recent Students</h3>
+					<a href="/students" class="btn btn-primary">View All →</a>
 				</div>
 				<div class="table-container">
-					<table>
+					<table class="data-table">
 						<thead>
 							<tr>
 								<th>Student ID</th>
@@ -118,13 +118,13 @@
 			</div>
 		</div>
 		
-		<div class="card">
+		<div class="dashboard-card">
 			<div class="card-header">
-				<h3 class="card-title">My Sections</h3>
-				<a href="/sections" class="btn btn-small btn-primary">View All</a>
+				<h3 class="card-title">🏫 My Sections</h3>
+				<a href="/sections" class="btn btn-primary">View All →</a>
 			</div>
 			<div class="table-container">
-				<table>
+				<table class="data-table">
 					<thead>
 						<tr>
 							<th>Section Name</th>
@@ -138,7 +138,7 @@
 								<td>{section.SectionName}</td>
 								<td>{section.StudentCount || 0}</td>
 								<td>
-									<a href="/sections/{section.SectionID}" class="btn btn-small btn-secondary">
+									<a href="/sections/{section.SectionID}" class="btn btn-secondary">
 										View Details
 									</a>
 								</td>
@@ -161,13 +161,13 @@
 			</div>
 		</div>
 		
-		<div class="card">
+		<div class="dashboard-card">
 			<div class="card-header">
-				<h3 class="card-title">My Sections</h3>
-				<a href="/my-sections" class="btn btn-small btn-primary">View All</a>
+				<h3 class="card-title">📚 My Sections</h3>
+				<a href="/my-sections" class="btn btn-primary">View All →</a>
 			</div>
 			<div class="table-container">
-				<table>
+				<table class="data-table">
 					<thead>
 						<tr>
 							<th>Section Name</th>
@@ -192,17 +192,21 @@
 
 <style>
 	.dashboard {
-		max-width: 1200px;
+		max-width: 1400px;
 		margin: 0 auto;
+		padding: 1rem;
 	}
 	
 	.dashboard-header {
 		margin-bottom: 2rem;
+		text-align: center;
 	}
 	
 	.dashboard-header h1 {
 		margin: 0 0 0.5rem 0;
 		color: #2c3e50;
+		font-size: 2.5rem;
+		font-weight: 600;
 	}
 	
 	.welcome-text {
@@ -211,26 +215,34 @@
 		font-size: 1.1rem;
 	}
 	
+	/* Stats Grid - Matching attendance module */
 	.stats-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-		gap: 1rem;
+		gap: 1.5rem;
 		margin-bottom: 2rem;
 	}
 	
 	.stat-card {
 		background: white;
-		padding: 1.5rem;
-		border-radius: 8px;
-		box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+		padding: 2rem;
+		border-radius: 12px;
+		box-shadow: 0 4px 20px rgba(0,0,0,0.1);
 		text-align: center;
+		transition: transform 0.3s ease, box-shadow 0.3s ease;
+	}
+	
+	.stat-card:hover {
+		transform: translateY(-4px);
+		box-shadow: 0 8px 25px rgba(52, 152, 219, 0.15);
 	}
 	
 	.stat-number {
-		font-size: 2.5rem;
+		font-size: 3rem;
 		font-weight: bold;
 		color: #3498db;
 		margin-bottom: 0.5rem;
+		display: block;
 	}
 	
 	.stat-label {
@@ -239,13 +251,134 @@
 		font-weight: 500;
 	}
 	
+	/* Dashboard Grid */
 	.dashboard-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
 		gap: 2rem;
 	}
 	
+	/* Dashboard Cards - Matching attendance module design */
+	.dashboard-card {
+		background: white;
+		border-radius: 12px;
+		box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+		overflow: hidden;
+		transition: transform 0.3s ease, box-shadow 0.3s ease;
+	}
+	
+	.dashboard-card:hover {
+		transform: translateY(-4px);
+		box-shadow: 0 8px 25px rgba(52, 152, 219, 0.15);
+	}
+	
+	.card-header {
+		padding: 2rem;
+		background: linear-gradient(135deg, #3498db, #2980b9);
+		color: white;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 1rem;
+	}
+	
+	.card-title {
+		margin: 0;
+		font-size: 1.5rem;
+		font-weight: 600;
+	}
+	
+	/* Table Styles - Matching attendance module */
+	.table-container {
+		padding: 0 2rem 2rem;
+	}
+	
+	.data-table {
+		width: 100%;
+		border-collapse: collapse;
+		background: white;
+		border-radius: 8px;
+		overflow: hidden;
+		box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+	}
+	
+	.data-table th {
+		background: #34495e;
+		color: white;
+		padding: 1rem 0.5rem;
+		text-align: left;
+		font-weight: 500;
+		border: 1px solid #2c3e50;
+	}
+	
+	.data-table td {
+		padding: 1rem 0.5rem;
+		border: 1px solid #ecf0f1;
+		color: #2c3e50;
+	}
+	
+	.data-table tbody tr:hover {
+		background: #f8f9fa;
+	}
+	
+	.text-center {
+		text-align: center;
+		color: #7f8c8d;
+		font-style: italic;
+	}
+	
+	/* Button Styles - Matching attendance module */
+	.btn {
+		padding: 0.75rem 1.5rem;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 1rem;
+		font-weight: 500;
+		transition: all 0.2s ease;
+		text-decoration: none;
+		display: inline-block;
+	}
+	
+	.btn-primary {
+		background: #3498db;
+		color: white;
+	}
+	
+	.btn-primary:hover {
+		background: #2980b9;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+	}
+	
+	.btn-secondary {
+		background: #6c757d;
+		color: white;
+	}
+	
+	.btn-secondary:hover {
+		background: #5a6268;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+	}
+	
+	/* Error Message */
+	.error-message {
+		background: #f8d7da;
+		color: #721c24;
+		padding: 1rem;
+		border-radius: 6px;
+		margin-bottom: 1rem;
+		text-align: center;
+	}
+	
+	/* Responsive Design */
 	@media (max-width: 768px) {
+		.dashboard {
+			padding: 0.5rem;
+		}
+		
 		.stats-grid {
 			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		}
@@ -256,6 +389,20 @@
 		
 		.stat-number {
 			font-size: 2rem;
+		}
+		
+		.card-header {
+			flex-direction: column;
+			align-items: flex-start;
+			text-align: left;
+		}
+		
+		.table-container {
+			padding: 0 1rem 1rem;
+		}
+		
+		.data-table {
+			font-size: 0.9rem;
 		}
 	}
 </style>

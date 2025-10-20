@@ -32,6 +32,23 @@ export async function load({ request, url }) {
 			availableSections = await getTeacherSections(session.userId);
 		}
 		
+		// Load subject counts for each section to display in cards
+		for (const section of availableSections) {
+			try {
+				let sectionSubjects = [];
+				if (session.role === 'Admin') {
+					const { getSectionSubjects } = await import('../../services/sectionService.js');
+					sectionSubjects = await getSectionSubjects(section.SectionID);
+				} else if (session.role === 'Teacher') {
+					sectionSubjects = await getTeacherSubjectsInSection(session.userId, section.SectionID);
+				}
+				section.subjectCount = sectionSubjects.length;
+			} catch (error) {
+				console.error(`Failed to load subjects for section ${section.SectionID}:`, error);
+				section.subjectCount = 0;
+			}
+		}
+		
 		// Load subjects if a section is selected
 		let availableSubjects = [];
 		if (selectedSectionId) {

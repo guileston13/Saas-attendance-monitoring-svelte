@@ -9,34 +9,80 @@
 	
 	$: menuItems = getMenuItems(session.role);
 	
+	// Track current path for reactivity
+	$: currentPath = $page.url.pathname;
+	
+	// Reactive statement to compute active menu items based on current path and session
+	$: activeMenuItems = $page.url.pathname && getMenuItems(session.role).map(item => ({
+		...item,
+		isActive: isMenuItemActive(item.href)
+	}));
+	
+	function isMenuItemActive(href) {
+		if (href === '/dashboard') {
+			return currentPath === '/dashboard';
+		}
+		
+		// For other routes, check if current path starts with href
+		// but also ensure it doesn't match other routes
+		if (href === '/subjects') {
+			return currentPath === '/subjects' || currentPath.startsWith('/subjects/');
+		}
+		if (href === '/sections') {
+			return currentPath === '/sections' || currentPath.startsWith('/sections/');
+		}
+		if (href === '/students') {
+			return currentPath === '/students' || currentPath.startsWith('/students/');
+		}
+		if (href === '/teachers') {
+			return currentPath === '/teachers' || currentPath.startsWith('/teachers/');
+		}
+		if (href === '/attendance') {
+			return currentPath === '/attendance' || currentPath.startsWith('/attendance/');
+		}
+		if (href === '/users') {
+			return currentPath === '/users' || currentPath.startsWith('/users/');
+		}
+		if (href === '/reports') {
+			return currentPath === '/reports' || currentPath.startsWith('/reports/');
+		}
+		if (href === '/rooms') {
+			return currentPath === '/rooms' || currentPath.startsWith('/rooms/');
+		}
+		
+		// Default fallback
+		return currentPath.startsWith(href);
+	}
+	
 	function getMenuItems(role) {
 		const commonItems = [
-			{ href: '/dashboard', icon: '📊', text: 'Dashboard', active: $page.url.pathname === '/dashboard' }
+			{ href: '/dashboard', icon: '📊', text: 'Dashboard' }
 		];
 		
 		if (role === 'Admin') {
 			return [
 				...commonItems,
-				{ href: '/students', icon: '👥', text: 'Students', active: $page.url.pathname.startsWith('/students') },
-				{ href: '/teachers', icon: '👨‍🏫', text: 'Teachers', active: $page.url.pathname.startsWith('/teachers') },
-				{ href: '/subjects', icon: '📚', text: 'Subjects', active: $page.url.pathname.startsWith('/subjects') },
-				{ href: '/sections', icon: '🏫', text: 'Sections', active: $page.url.pathname.startsWith('/sections') },
-				{ href: '/attendance', icon: '📋', text: 'Attendance', active: $page.url.pathname.startsWith('/attendance') },
-				{ href: '/users', icon: '👤', text: 'Users', active: $page.url.pathname.startsWith('/users') },
-				{ href: '/reports', icon: '📈', text: 'Reports', active: $page.url.pathname.startsWith('/reports') }
+				{ href: '/students', icon: '👥', text: 'Students' },
+				{ href: '/teachers', icon: '👨‍🏫', text: 'Teachers' },
+				{ href: '/subjects', icon: '📚', text: 'Subjects' },
+				{ href: '/sections', icon: '🏫', text: 'Sections' },
+				{ href: '/rooms', icon: '🏢', text: 'Rooms' },
+				{ href: '/attendance', icon: '📋', text: 'Attendance' },
+				{ href: '/users', icon: '👤', text: 'Users' },
+				{ href: '/reports', icon: '📈', text: 'Reports' }
 			];
 		} else if (role === 'Teacher') {
 			return [
 				...commonItems,
-				{ href: '/sections', icon: '🏫', text: 'My Sections', active: $page.url.pathname.startsWith('/sections') },
-				{ href: '/attendance', icon: '📋', text: 'Attendance', active: $page.url.pathname.startsWith('/attendance') },
-				{ href: '/students', icon: '👥', text: 'Students', active: $page.url.pathname.startsWith('/students') }
+				{ href: '/sections', icon: '🏫', text: 'My Sections' },
+				{ href: '/attendance', icon: '📋', text: 'Attendance' },
+				{ href: '/students', icon: '👥', text: 'Students' }
 			];
 		} else if (role === 'Student') {
 			return [
 				...commonItems,
-				{ href: '/my-sections', icon: '🏫', text: 'My Sections', active: $page.url.pathname.startsWith('/my-sections') },
-				{ href: '/profile', icon: '👤', text: 'Profile', active: $page.url.pathname === '/profile' }
+				{ href: '/my-sections', icon: '🏫', text: 'My Sections' },
+				{ href: '/profile', icon: '👤', text: 'Profile' }
 			];
 		}
 		
@@ -54,10 +100,10 @@
 	</div>
 	
 	<nav class="sidebar-nav">
-		{#each menuItems as item}
+		{#each activeMenuItems as item}
 			<a href={item.href} 
 				class="nav-link" 
-				class:active={item.active}>
+				class:active={item.isActive}>
 				<span class="nav-icon">{item.icon}</span>
 				<span class="nav-text">{item.text}</span>
 			</a>

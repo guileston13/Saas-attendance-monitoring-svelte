@@ -40,7 +40,7 @@ export async function createSubject(subjectData) {
     const { subjectName, subjectCode, room, startTime, endTime, statusId } = subjectData;
     
     return await executeQuery(
-        `INSERT INTO subjects (SubjectName, SubjectCode, Room, StartTime, EndTime, StatusID) 
+        `INSERT INTO subjects (SubjectName, SubjectCode, RoomID, StartTime, EndTime, StatusID) 
          VALUES (?, ?, ?, ?, ?, ?)`,
         [subjectName, subjectCode, room, startTime, endTime, statusId]
     );
@@ -57,7 +57,7 @@ export async function updateSubject(subjectId, subjectData) {
     
     return await executeQuery(
         `UPDATE subjects 
-         SET SubjectName = ?, SubjectCode = ?, Room = ?, StartTime = ?, EndTime = ?, StatusID = ? 
+         SET SubjectName = ?, SubjectCode = ?, RoomID = ?, StartTime = ?, EndTime = ?, StatusID = ? 
          WHERE SubjectID = ?`,
         [subjectName, subjectCode, room, startTime, endTime, statusId, subjectId]
     );

@@ -39,12 +39,14 @@ export async function load({ request, url }) {
 		let subjects = [];
 		let teachers = [];
 		let statuses = [];
+		let rooms = [];
 		
 		if (hasRole(session, 'Admin')) {
-			[subjects, teachers, statuses] = await Promise.all([
+			[subjects, teachers, statuses, rooms] = await Promise.all([
 				getAllSubjects(),
 				getAllTeachers(),
-				executeQuery('SELECT * FROM status ORDER BY StatusName')
+				executeQuery('SELECT * FROM status ORDER BY StatusName'),
+				executeQuery('SELECT RoomID, RoomName FROM room ORDER BY RoomName')
 			]);
 		}
 		
@@ -56,6 +58,7 @@ export async function load({ request, url }) {
 			subjects,
 			teachers,
 			statuses,
+			rooms,
 			currentSection: selectedSection ? selectedSection.SectionName : 'Sections'
 		};
 	} catch (error) {
@@ -68,6 +71,7 @@ export async function load({ request, url }) {
 			subjects: [],
 			teachers: [],
 			statuses: [],
+			rooms: [],
 			error: 'Failed to load sections data',
 			currentSection: 'Sections'
 		};

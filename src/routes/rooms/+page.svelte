@@ -1,55 +1,39 @@
 <script>
-// Subjects management page
-import { browser } from '$app/environment';
+// Rooms management page
+import { page } from '$app/stores';
+import { goto, invalidateAll } from '$app/navigation';
+import { enhance } from '$app/forms';
 
 /** @type {import('./$types').PageData} */
 export let data;
 
-$: session = data.session;
-$: subjects = data.subjects || [];
-$: statusList = data.statusList || [];
+$: rooms = data.rooms || [];
+$: isAdmin = data.session?.role === 'Admin';
 
 let showModal = false;
-let editingSubject = null;
+let editingRoom = null;
 let loading = false;
 let searchTerm = '';
 
 // Form data
 let formData = {
-	subjectName: '',
-	subjectCode: '',
-	room: '',
-	startTime: '',
-	endTime: '',
-	statusId: ''
+	roomName: ''
 };
 
-// Filter subjects based on search term
-$: filteredSubjects = subjects.filter(subject => 
-	subject.SubjectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-	subject.SubjectCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-	(subject.RoomID && subject.RoomID.toLowerCase().includes(searchTerm.toLowerCase()))
+// Filter rooms based on search term
+$: filteredRooms = rooms.filter(room => 
+	room.RoomName.toLowerCase().includes(searchTerm.toLowerCase())
 );
 
-function openModal(subject = null) {
-	editingSubject = subject;
-	if (subject) {
+function openModal(room = null) {
+	editingRoom = room;
+	if (room) {
 		formData = {
-			subjectName: subject.SubjectName,
-			subjectCode: subject.SubjectCode,
-			room: subject.RoomID || '',
-			startTime: subject.StartTime || '',
-			endTime: subject.EndTime || '',
-			statusId: subject.StatusID.toString()
+			roomName: room.RoomName
 		};
 	} else {
 		formData = {
-			subjectName: '',
-			subjectCode: '',
-			room: '',
-			startTime: '',
-			endTime: '',
-			statusId: '1'
+			roomName: ''
 		};
 	}
 	showModal = true;
@@ -57,7 +41,7 @@ function openModal(subject = null) {
 
 function closeModal() {
 	showModal = false;
-	editingSubject = null;
+	editingRoom = null;
 	resetForm();
 }
 
@@ -69,38 +53,37 @@ function handleKeydown(event) {
 
 function resetForm() {
 	formData = {
-		subjectName: '',
-		subjectCode: '',
-		room: '',
-		startTime: '',
-		endTime: '',
-		statusId: ''
+		roomName: ''
 	};
 }
 
 async function handleSubmit() {
-	if (!browser) return;
-	
+	if (!isAdmin) return;
+
 	loading = true;
-	
+
 	try {
-		const method = editingSubject ? 'PUT' : 'POST';
-		const response = await fetch('/api/subjects', {
+		const method = editingRoom ? 'PUT' : 'POST';
+		const url = editingRoom
+			? `/api/rooms/${editingRoom.RoomID}`
+			: '/api/rooms';
+
+		const response = await fetch(url, {
 			method,
 			headers: {
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
 				...formData,
-				statusId: parseInt(formData.statusId),
-				...(editingSubject && { subjectId: editingSubject.SubjectID })
+				...(editingRoom && { roomId: editingRoom.RoomID })
 			})
 		});
-		
+
 		const result = await response.json();
-		
+
 		if (response.ok) {
-			window.location.reload();
+			await invalidateAll();
+			closeModal();
 		} else {
 			alert(result.error || 'An error occurred');
 		}
@@ -112,28 +95,24 @@ async function handleSubmit() {
 	}
 }
 
-async function handleDelete(subjectId) {
-	if (!browser) return;
+async function handleDelete(roomId) {
+	if (!isAdmin) return;
 
-	if (!confirm('Are you sure you want to delete this subject?')) {
+	if (!confirm('Are you sure you want to delete this room?')) {
 		return;
 	}
 
 	try {
-		const response = await fetch('/api/subjects', {
-			method: 'DELETE',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ subjectId })
+		const response = await fetch(`/api/rooms/${roomId}`, {
+			method: 'DELETE'
 		});
 
 		const result = await response.json();
 
 		if (response.ok) {
-			window.location.reload();
+			await invalidateAll();
 		} else {
-			alert(result.error || 'Failed to delete subject');
+			alert(result.error || 'Failed to delete room');
 		}
 	} catch (error) {
 		console.error('Delete error:', error);
@@ -143,56 +122,56 @@ async function handleDelete(subjectId) {
 </script>
 
 <svelte:head>
-	<title>Subjects - School Management System</title>
+	<title>Rooms - School Management System</title>
 </svelte:head>
 
-<div class="subjects-page">
+<div class="rooms-page">
 	<!-- Page Header -->
 	<div class="page-header">
 		<div class="header-content">
-			<h1>📚 Subjects Management</h1>
-			<p class="subtitle">Manage academic subjects, schedules, and room assignments</p>
+			<h1>🏫 Rooms Management</h1>
+			<p class="subtitle">Manage classroom and facility assignments</p>
 		</div>
-		{#if session.role === 'Admin'}
+		{#if isAdmin}
 			<button class="btn btn-primary" on:click={() => openModal()}>
-				➕ Add New Subject
+				➕ Add New Room
 			</button>
 		{/if}
 	</div>
-	
+
 	{#if data.error}
 		<div class="error-message">{data.error}</div>
 	{/if}
-	
+
 	<!-- Stats Cards -->
 	<div class="stats-grid">
 		<div class="stat-card">
-			<div class="stat-icon">📚</div>
-			<span class="stat-number">{subjects.length}</span>
-			<span class="stat-label">Total Subjects</span>
-		</div>
-		<div class="stat-card">
-			<div class="stat-icon">✅</div>
-			<span class="stat-number">{subjects.filter(s => s.StatusName === 'Active').length}</span>
-			<span class="stat-label">Active Subjects</span>
-		</div>
-		<div class="stat-card">
 			<div class="stat-icon">🏫</div>
-			<span class="stat-number">{new Set(subjects.map(s => s.RoomID).filter(Boolean)).size}</span>
-			<span class="stat-label">Rooms Used</span>
+			<span class="stat-number">{rooms.length}</span>
+			<span class="stat-label">Total Rooms</span>
 		</div>
 		<div class="stat-card">
-			<div class="stat-icon">⏰</div>
-			<span class="stat-number">{subjects.filter(s => s.StartTime && s.EndTime).length}</span>
-			<span class="stat-label">Scheduled</span>
+			<div class="stat-icon">🏛️</div>
+			<span class="stat-number">{rooms.filter(r => r.RoomName.toLowerCase().includes('lab')).length}</span>
+			<span class="stat-label">Labs</span>
+		</div>
+		<div class="stat-card">
+			<div class="stat-icon">🏃‍♂️</div>
+			<span class="stat-number">{rooms.filter(r => r.RoomName.toLowerCase().includes('gym')).length}</span>
+			<span class="stat-label">Gym Facilities</span>
+		</div>
+		<div class="stat-card">
+			<div class="stat-icon">📚</div>
+			<span class="stat-number">{rooms.filter(r => r.RoomName.toLowerCase().includes('room')).length}</span>
+			<span class="stat-label">Classrooms</span>
 		</div>
 	</div>
-	
+
 	<!-- Search and Table Section -->
 	<div class="content-section">
 		<div class="section-card">
 			<div class="card-header">
-				<h3 class="card-title">📋 Subject Records</h3>
+				<h3 class="card-title">📋 Room Records</h3>
 			</div>
 			
 			<div class="card-content">
@@ -201,52 +180,40 @@ async function handleDelete(subjectId) {
 					<input
 						type="text"
 						bind:value={searchTerm}
-						placeholder="🔍 Search by name, code, or room..."
+						placeholder="🔍 Search by room name..."
 						class="search-input"
 					>
 				</div>
 				
-				<!-- Subjects table -->
+				<!-- Rooms table -->
 				<div class="table-container">
 					<table class="data-table">
 						<thead>
 							<tr>
-								<th>Subject Code</th>
-								<th>Subject Name</th>
-								<th>Room</th>
-								<th>Start Time</th>
-								<th>End Time</th>
-								<th>Status</th>
-								{#if session.role === 'Admin'}
+								<th>Room ID</th>
+								<th>Room Name</th>
+								{#if isAdmin}
 									<th>Actions</th>
 								{/if}
 							</tr>
 						</thead>
 						<tbody>
-							{#each filteredSubjects as subject}
+							{#each filteredRooms as room}
 								<tr>
-									<td><code>{subject.SubjectCode}</code></td>
-									<td>{subject.SubjectName}</td>
-									<td>{subject.RoomID || '-'}</td>
-									<td>{subject.StartTime || '-'}</td>
-									<td>{subject.EndTime || '-'}</td>
-									<td>
-										<span class="status-badge {subject.StatusName.toLowerCase()}">
-											{subject.StatusName}
-										</span>
-									</td>
-									{#if session.role === 'Admin'}
+									<td>#{room.RoomID}</td>
+									<td>{room.RoomName}</td>
+									{#if isAdmin}
 										<td>
 											<div class="actions">
-												<button 
+												<button
 													class="btn btn-secondary"
-													on:click={() => openModal(subject)}
+													on:click={() => openModal(room)}
 												>
 													Edit
 												</button>
-												<button 
+												<button
 													class="btn btn-danger"
-													on:click={() => handleDelete(subject.SubjectID)}
+													on:click={() => handleDelete(room.RoomID)}
 												>
 													Delete
 												</button>
@@ -256,10 +223,10 @@ async function handleDelete(subjectId) {
 								</tr>
 							{:else}
 								<tr>
-									<td colspan={Number(session.role === 'Admin' ? '7' : '6')} class="text-center">
+									<td colspan="{Number(isAdmin ? 3 : 2)}" class="text-center">
 										<div class="empty-state">
-											<h3>No subjects found</h3>
-											<p>{searchTerm ? 'Try adjusting your search terms' : 'No subject records available'}</p>
+											<h3>No rooms found</h3>
+											<p>{searchTerm ? 'Try adjusting your search terms' : 'No room records available'}</p>
 										</div>
 									</td>
 								</tr>
@@ -272,98 +239,31 @@ async function handleDelete(subjectId) {
 	</div>
 </div>
 
-<!-- Modal for add/edit subject -->
+<!-- Modal for add/edit room -->
 {#if showModal}
 	<div class="modal-overlay" on:click={closeModal} on:keydown={handleKeydown} role="dialog" aria-modal="true" tabindex="-1">
 		<div class="modal-content" on:click|stopPropagation role="document">
 			<div class="modal-header">
-				<h3 class="modal-title">
-					{editingSubject ? '✏️ Edit Subject' : '➕ Add New Subject'}
+				<h3 id="modal-title" class="modal-title">
+					{editingRoom ? '✏️ Edit Room' : '➕ Add New Room'}
 				</h3>
 				<button class="close-btn" on:click={closeModal} aria-label="Close modal">×</button>
 			</div>
-			
+
 			<form on:submit|preventDefault={handleSubmit}>
 				<div class="form-group">
-					<label for="subjectCode" class="form-label">Subject Code:</label>
+					<label for="roomName" class="form-label">Room Name:</label>
 					<input
 						type="text"
-						id="subjectCode"
-						bind:value={formData.subjectCode}
+						id="roomName"
+						bind:value={formData.roomName}
 						required
 						disabled={loading}
-						placeholder="e.g., MATH101"
-						style="text-transform: uppercase;"
+						placeholder="e.g., R1-101, Lab 1, Gym"
 						class="form-input"
 					/>
 				</div>
-				
-				<div class="form-group">
-					<label for="subjectName" class="form-label">Subject Name:</label>
-					<input
-						type="text"
-						id="subjectName"
-						bind:value={formData.subjectName}
-						required
-						disabled={loading}
-						placeholder="e.g., Mathematics"
-						class="form-input"
-					/>
-				</div>
-				
-				<div class="form-group">
-					<label for="room" class="form-label">Room:</label>
-					<input
-						type="text"
-						id="room"
-						bind:value={formData.room}
-						disabled={loading}
-						placeholder="e.g., Room 101, Lab 1, Gym"
-						class="form-input"
-					/>
-				</div>
-				
-				<div class="form-row">
-					<div class="form-group">
-						<label for="startTime" class="form-label">Start Time:</label>
-						<input
-							type="time"
-							id="startTime"
-							bind:value={formData.startTime}
-							disabled={loading}
-							class="form-input"
-						/>
-					</div>
-					
-					<div class="form-group">
-						<label for="endTime" class="form-label">End Time:</label>
-						<input
-							type="time"
-							id="endTime"
-							bind:value={formData.endTime}
-							disabled={loading}
-							class="form-input"
-						/>
-					</div>
-				</div>
-				
-				<div class="form-group">
-					<label for="statusId" class="form-label">Status:</label>
-					<select
-						id="statusId"
-						bind:value={formData.statusId}
-						required
-						disabled={loading}
-						class="form-select"
-					>
-						{#each statusList as status}
-							<option value={status.StatusID.toString()}>
-								{status.StatusName}
-							</option>
-						{/each}
-					</select>
-				</div>
-				
+
 				<div class="modal-actions">
 					<button type="button" class="btn btn-secondary" on:click={closeModal} disabled={loading}>
 						Cancel
@@ -372,7 +272,7 @@ async function handleDelete(subjectId) {
 						{#if loading}
 							<span class="spinner"></span>
 						{/if}
-						{editingSubject ? 'Update Subject' : 'Create Subject'}
+						{editingRoom ? 'Update Room' : 'Create Room'}
 					</button>
 				</div>
 			</form>
@@ -381,7 +281,7 @@ async function handleDelete(subjectId) {
 {/if}
 
 <style>
-	.subjects-page {
+	.rooms-page {
 		max-width: 1400px;
 		margin: 0 auto;
 		padding: 1rem;
@@ -541,35 +441,6 @@ async function handleDelete(subjectId) {
 		text-align: center;
 	}
 	
-	/* Subject Code */
-	code {
-		background: #f8f9fa;
-		padding: 0.2rem 0.4rem;
-		border-radius: 3px;
-		font-family: 'Courier New', monospace;
-		font-size: 0.9rem;
-		color: #e74c3c;
-	}
-	
-	/* Status Badges */
-	.status-badge {
-		padding: 0.25rem 0.75rem;
-		border-radius: 20px;
-		font-size: 0.85rem;
-		font-weight: 500;
-		text-transform: uppercase;
-	}
-	
-	.status-badge.active {
-		background: #d4edda;
-		color: #155724;
-	}
-	
-	.status-badge.inactive {
-		background: #f8d7da;
-		color: #721c24;
-	}
-	
 	/* Actions */
 	.actions {
 		display: flex;
@@ -595,10 +466,15 @@ async function handleDelete(subjectId) {
 		color: white;
 	}
 	
-	.btn-primary:hover {
+	.btn-primary:hover:not(:disabled) {
 		background: #2980b9;
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+	}
+	
+	.btn-primary:disabled {
+		background: #bdc3c7;
+		cursor: not-allowed;
 	}
 	
 	.btn-secondary {
@@ -670,8 +546,8 @@ async function handleDelete(subjectId) {
 		height: 100%;
 		background: rgba(0,0,0,0.5);
 		display: flex;
-		align-items: center;
 		justify-content: center;
+		align-items: center;
 		z-index: 1000;
 	}
 	
@@ -748,15 +624,6 @@ async function handleDelete(subjectId) {
 		cursor: not-allowed;
 	}
 	
-	.form-row {
-		display: flex;
-		gap: 1rem;
-	}
-	
-	.form-row .form-group {
-		flex: 1;
-	}
-	
 	.modal-actions {
 		display: flex;
 		justify-content: flex-end;
@@ -767,7 +634,7 @@ async function handleDelete(subjectId) {
 	
 	/* Responsive Design */
 	@media (max-width: 768px) {
-		.subjects-page {
+		.rooms-page {
 			padding: 0.5rem;
 		}
 		
@@ -809,11 +676,6 @@ async function handleDelete(subjectId) {
 		
 		.modal-actions {
 			flex-direction: column;
-		}
-		
-		.form-row {
-			flex-direction: column;
-			gap: 0;
 		}
 	}
 </style>
