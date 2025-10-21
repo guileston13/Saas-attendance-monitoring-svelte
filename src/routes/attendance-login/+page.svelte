@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount , onDestroy } from "svelte";
 
   // UI state
   let showForm = false;
@@ -73,6 +73,8 @@
     localStorage.setItem("SERVER_URL", SERVER_URL);
   }
 
+  let sensorInterval;
+  
   // On mount: auto-select EMEET USB webcam
   onMount(async () => {
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -123,9 +125,31 @@
     } catch (e) {
       console.error("Failed to fetch subjects", e);
     }
+
+    sensorInterval = setInterval(checkSensorTrigger, 1000); // every second
   });
 
+  onDestroy(() => {
+    if (sensorInterval) clearInterval(sensorInterval);
+  });
 
+  // --- Sensor polling ---
+  async function checkSensorTrigger() {
+    try {
+      const res = await fetch("/api/sensor");
+      const data = await res.json();
+
+      if (data.status === "camera_start") {
+        console.log("👤 Sensor triggered camera start");
+        startLoginCamera(); // start camera
+      } else if (data.status === "camera_stop") {
+        console.log("🚫 Sensor triggered camera stop");
+        stopLoginCamera(); // stop camera
+      }
+    } catch (err) {
+      console.error("Failed to check sensor:", err);
+    }
+  }
   // -------------------------
   // QR scanner (html5-qrcode) - dynamic import so SSR doesn't break
   // -------------------------

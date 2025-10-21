@@ -3,36 +3,33 @@ import { defineConfig } from 'vite';
 import path from 'path';
 
 export default defineConfig({
-	plugins: [
-		sveltekit(),
-		// Plugin to set client IP header in development
-		{
-			name: 'client-ip-middleware',
-			configureServer(server) {
-				server.middlewares.use((req, res, next) => {
-					// Set x-forwarded-for header with client IP for development
-					if (!req.headers['x-forwarded-for']) {
-						const clientIP = req.connection.remoteAddress || req.socket.remoteAddress;
-						if (clientIP) {
-							req.headers['x-forwarded-for'] = clientIP.replace(/^::ffff:/, ''); // Remove IPv6 prefix for IPv4
-						}
-					}
-					next();
-				});
-			}
-		}
-	],
-	server: {
-		fs: {
-			allow: [
-				'src',
-				'node_modules',
-				// Add this line:
-				path.resolve(__dirname, 'models')
-			]
-		},
-		allowedHosts: [
-			'milton-demonstrate-passed-compact.trycloudflare.com'
-		]
-	}
+  plugins: [
+    sveltekit(),
+    {
+      name: 'client-ip-middleware',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (!req.headers['x-forwarded-for']) {
+            const clientIP = req.connection.remoteAddress || req.socket.remoteAddress;
+            if (clientIP) req.headers['x-forwarded-for'] = clientIP.replace(/^::ffff:/, '');
+          }
+          next();
+        });
+      }
+    }
+  ],
+  server: {
+    host: true, // ✅ this makes Vite listen on 0.0.0.0 (all network interfaces)
+    port: 5173, // optional, default is 5173
+    fs: {
+      allow: [
+        'src',
+        'node_modules',
+        path.resolve(__dirname, 'models')
+      ]
+    },
+    allowedHosts: [
+      'milton-demonstrate-passed-compact.trycloudflare.com'
+    ]
+  }
 });
