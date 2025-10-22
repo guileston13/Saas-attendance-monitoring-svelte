@@ -73,8 +73,7 @@
     localStorage.setItem("SERVER_URL", SERVER_URL);
   }
 
-  let sensorInterval;
-  
+  let eventSource;
   // On mount: auto-select EMEET USB webcam
   onMount(async () => {
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -125,31 +124,32 @@
     } catch (e) {
       console.error("Failed to fetch subjects", e);
     }
+    eventSource = new EventSource("/api/stream");
+    eventSource.onmessage = (event) => {
+      console.log("📡 SSE message received:", event.data);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.status === "camera_started") {
+          console.log("🎥 Camera started!");
+          startLoginCamera();   // ✅ now runs only when camera_started
+        }
 
-    sensorInterval = setInterval(checkSensorTrigger, 1000); // every second
-  });
-
-  onDestroy(() => {
-    if (sensorInterval) clearInterval(sensorInterval);
-  });
-
-  // --- Sensor polling ---
-  async function checkSensorTrigger() {
-    try {
-      const res = await fetch("/api/sensor");
-      const data = await res.json();
-
-      if (data.status === "camera_start") {
-        console.log("👤 Sensor triggered camera start");
-        startLoginCamera(); // start camera
-      } else if (data.status === "camera_stop") {
-        console.log("🚫 Sensor triggered camera stop");
-        stopLoginCamera(); // stop camera
+        if (data.status === "camera_stopped") {
+          console.log("🛑 Camera stopped!");
+          stopLoginCamera();    // ✅ now runs only when camera_stopped
+        }
+      } catch (err) {
+        console.warn("⚠️ Invalid SSE message:", event.data);
       }
-    } catch (err) {
-      console.error("Failed to check sensor:", err);
-    }
-  }
+    };
+    eventSource.onerror = (err) => {
+      console.error("⚠️ SSE connection error:", err);
+    };
+  });
+
+    onDestroy(() => {
+       if (eventSource) eventSource.close();
+    });
   // -------------------------
   // QR scanner (html5-qrcode) - dynamic import so SSR doesn't break
   // -------------------------
@@ -1163,18 +1163,6 @@
     color: white;
     cursor: pointer;
   }
-  .login-result {
-    display: none; /* Hidden class - kept for backward compatibility */
-  }
-
-  .login-result img {
-    display: none;
-  }
-
-  .login-message {
-    display: none;
-  }
-
   video {
     width: 100%;
     max-width: 480px;

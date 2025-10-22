@@ -22,10 +22,11 @@ let modelsLoaded = false;
 async function ensureModelsLoaded() {
   if (!modelsLoaded) {
     await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromDisk(MODEL_PATH),
+      faceapi.nets.mtcnn.loadFromDisk(MODEL_PATH),
       faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_PATH),
       faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_PATH),
     ]);
+    console.log("✅ MTCNN + Landmarks + Recognition models loaded");
     modelsLoaded = true;
   }
 }
@@ -39,13 +40,16 @@ function imageFromBase64(base64) {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = (err) => reject(err);
-    img.src = bufferFromBase64(base64);
+
+    // Ensure proper data URI
+    const dataUri = base64.startsWith('data:image') ? base64 : `data:image/png;base64,${base64}`;
+    img.src = dataUri;
   });
 }
 
-const tinyOptions = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 320,
-  scoreThreshold: 0.5
+const mtcnnOptions = new faceapi.MtcnnOptions({
+  minFaceSize: 100,
+  scaleFactor: 0.709
 });
 
 export async function handleCheckFace(request) {
@@ -56,8 +60,9 @@ export async function handleCheckFace(request) {
 
     const img = await imageFromBase64(image);
     const detection = await faceapi
-      .detectSingleFace(img, tinyOptions)
-      .withFaceLandmarks();
+      .detectSingleFace(img, mtcnnOptions)
+      .withFaceLandmarks()
+      .withFaceDescriptor();
 
     if (!detection) return new Response(JSON.stringify({ orientation: 'none' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
@@ -118,23 +123,28 @@ export async function handleRegister(request) {
     for (let i = 1; i <= 3; i++) {
       const img = await imageFromBase64(images[`pic${i}`]);
       const detection = await faceapi
-        .detectSingleFace(img, tinyOptions)
+        .detectSingleFace(img, mtcnnOptions)
         .withFaceLandmarks()
         .withFaceDescriptor();
-      
+
       if (!detection) {
-        return new Response(JSON.stringify({ message: `❌ No face detected in image ${i}` }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        console.warn(`⚠️ No face detected in image ${i}, skipping`);
+        continue; // skip rather than returning 400 immediately
       }
-      
+
       descriptors.push(Array.from(detection.descriptor));
-      
-      // Save image
       const imageBuffer = bufferFromBase64(images[`pic${i}`]);
       fs.writeFileSync(path.join(FACE_DIR, `${studentId}_pic${i}.png`), imageBuffer);
     }
+
+    if (descriptors.length === 0) {
+      return new Response(JSON.stringify({ message: '❌ No faces detected in any image' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log(images.pic1.substring(0, 50)); // should start with data:image/png;base64
     
     // Save descriptors with student info
     const descriptorData = {
@@ -173,7 +183,7 @@ export async function handleLoginRecognize(request) {
 
     const img = await imageFromBase64(image);
     const detection = await faceapi
-      .detectSingleFace(img, tinyOptions)
+      .detectSingleFace(img, mtcnnOptions)
       .withFaceLandmarks()
       .withFaceDescriptor();
     
@@ -266,22 +276,31 @@ export async function handleLoginRecognize(request) {
 /**
  * Record attendance for a recognized student
  * @param {string} studentId - The recognized student ID
- * @param {number} subjectId - The subject ID
- * @param {number} sectionId - The section ID
+ * @param {number|string} subjectId - The subject ID
+ * @param {number|string} sectionId - The section ID
  */
-async function recordAttendance(studentId, subjectId, sectionId) {
+export async function recordAttendance(studentId, subjectId, sectionId) {
   try {
-    // Get today's date in YYYY-MM-DD format
+    // Ensure IDs are numbers
+    const subId = Number(subjectId);
+    const secId = Number(sectionId);
+
+    if (isNaN(subId) || isNaN(secId)) {
+      throw new Error(`Invalid numeric value for subjectId or sectionId: ${subjectId}, ${sectionId}`);
+    }
+
+    // Get today's date in YYYY-MM-DD
     const today = new Date().toISOString().split('T')[0];
-    
-    const recordedBy = 1; // Default teacher/user ID - you should make this configurable
-    
-    const result = await updateAttendanceRecord(studentId, subjectId, sectionId, today, 'Present', recordedBy);
-    console.log(`✅ Attendance recorded for student ${studentId}:`, result);
-    
+
+    const recordedBy = 1; // default teacher/user ID
+
+    // Call service to update attendance
+    const result = await updateAttendanceRecord(studentId, subId, secId, today, 'Present', recordedBy);
+
+    console.log(`✅ Attendance recorded for student ${studentId}, subjectId ${subId}, sectionId ${secId}`);
     return result;
   } catch (error) {
-    console.error('Failed to record attendance:', error);
+    console.error('⚠️ Failed to record attendance:', error.message);
     throw error;
   }
 }
