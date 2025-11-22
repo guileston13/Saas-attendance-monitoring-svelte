@@ -1,12 +1,24 @@
 <script>
-  import { onMount , onDestroy } from "svelte";
+  import { onMount, onDestroy } from "svelte";
 
-  // UI state
+  // 🎨 UI state for premium animations
+  let isLoading = true;
+  let loadingProgress = 0;
+  let loadingText = 'Initializing...';
+  let loadingFadeOut = false;
+  let formVisible = false;
+  let currentScreen = 'main'; // 'main', 'register', 'face', 'login', 'settings-auth', 'settings'
+
+  // Original state variables
   let showForm = false;
   let showFacePage = false;
   let showLoginPage = false;
   let showSettingsAuth = false;
   let showSettingsPage = false;
+
+  // 🎨 Animation state
+  let scrollY = 0;
+  let gradientOffset = 0;
 
   // QR scanner
   let scannerActive = false;
@@ -37,7 +49,7 @@
   let loginCtx;
   let loginStream;
   let loginMessage = "";
-  let loginMessageColor = "black"; 
+  let loginMessageColor = "black";
   let detectionInterval;
   let loginImageUrl = "";
 
@@ -59,7 +71,12 @@
   let SERVER_URL = "/attendance-login/api";
   let subjectList = [];
   let roomList = [];
-  if (typeof window !== "undefined") {
+
+  let eventSource;
+
+  // 🎨 Loading animation sequence
+  onMount(async () => {
+    // Load settings from localStorage
     deviceName = localStorage.getItem("deviceName") || "";
     selectedSubject = localStorage.getItem("selectedSubject") || "";
     SERVER_URL = localStorage.getItem("SERVER_URL") || "/attendance-login/api";
@@ -129,6 +146,7 @@
     } catch (e) {
       console.error("Failed to fetch subjects", e);
     }
+
     eventSource = new EventSource("/api/stream");
     eventSource.onmessage = (event) => {
       console.log("📡 SSE message received:", event.data);
@@ -136,12 +154,12 @@
         const data = JSON.parse(event.data);
         if (data.status === "camera_started") {
           console.log("🎥 Camera started!");
-          startLoginCamera();   // ✅ now runs only when camera_started
+          startLoginCamera();
         }
 
         if (data.status === "camera_stopped") {
           console.log("🛑 Camera stopped!");
-          stopLoginCamera();    // ✅ now runs only when camera_stopped
+          stopLoginCamera();
         }
       } catch (err) {
         console.warn("⚠️ Invalid SSE message:", event.data);
@@ -152,9 +170,38 @@
     };
   });
 
-    onDestroy(() => {
-       if (eventSource) eventSource.close();
-    });
+  // Cleanup function
+  onDestroy(() => {
+    if (typeof window === 'undefined') return;
+    if (eventSource) eventSource.close();
+    window.removeEventListener('scroll', () => {});
+  });
+
+  // Save settings to localStorage when they change
+  $: if (typeof window !== 'undefined' && deviceName) {
+    localStorage.setItem("deviceName", deviceName);
+  }
+  $: if (typeof window !== 'undefined' && selectedSubject) {
+    localStorage.setItem("selectedSubject", selectedSubject);
+  }
+  $: if (typeof window !== 'undefined' && SERVER_URL) {
+    localStorage.setItem("SERVER_URL", SERVER_URL);
+  }
+
+  // 🎨 Screen transition functions
+  function navigateTo(screen) {
+    currentScreen = screen;
+    formVisible = false;
+    setTimeout(() => formVisible = true, 100);
+  }
+
+  function goBack() {
+    currentScreen = 'main';
+    formVisible = false;
+    setTimeout(() => formVisible = true, 100);
+  }
+
+  // -------------------------
   // -------------------------
   // QR scanner (html5-qrcode) - dynamic import so SSR doesn't break
   // -------------------------
@@ -821,108 +868,358 @@
 
 </script>
 
-<div class="screen">
-  {#if !showForm && !showFacePage && !showLoginPage && !showSettingsAuth && !showSettingsPage}
-    <div class="main-buttons">
-      <button class="big-btn" on:click={() => { showLoginPage = true; startLoginCamera(); }}>
-        Login
-      </button>
-    </div>
+<div class="attendance-container">
+  <!-- 🎨 Loading Screen -->
+  {#if isLoading}
+    <div class="loading-screen" class:fade-out={loadingFadeOut}>
+      <!-- 🎨 Animated Background Gradient -->
+      <div class="loading-bg" style="transform: translateY({gradientOffset}px)">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+        <div class="gradient-orb orb-4"></div>
+        <div class="gradient-orb orb-5"></div>
+      </div>
 
-    <div class="bottom-button">
-      <button class="big-btn" on:click={() => showForm = true}>
-        Register
-      </button>
-    </div>
+      <!-- 🎨 Colorful Particles -->
+      <div class="particles-container">
+        {#each Array(25) as _, i}
+          <div class="particle particle-{i % 5 + 1}" style="animation-delay: {i * 0.1}s; left: {Math.random() * 100}%; top: {Math.random() * 100}%"></div>
+        {/each}
+      </div>
 
-    <button class="settings-btn" on:click={openSettingsAuth}>
-      <span class="gear">⚙️</span>
-    </button>
+      <!-- 🎨 Main Loading Content -->
+      <div class="loading-content">
+        <!-- 🎨 Animated Logo/Icon -->
+        <div class="loading-logo">
+          <div class="logo-icon">
+            <svg class="face-icon" fill="none" stroke="url(#faceGradient)" viewBox="0 0 24 24">
+              <defs>
+                <linearGradient id="faceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#3B82F6">
+                    <animate attributeName="stop-color" values="#3B82F6;#A855F7;#22C55E;#F97316;#3B82F6" dur="3s" repeatCount="indefinite" />
+                  </stop>
+                  <stop offset="100%" stop-color="#A855F7">
+                    <animate attributeName="stop-color" values="#A855F7;#22C55E;#F97316;#3B82F6;#A855F7" dur="3s" repeatCount="indefinite" />
+                  </stop>
+                </linearGradient>
+              </defs>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4L19 9Z" />
+            </svg>
+            <div class="logo-pulse"></div>
+          </div>
+        </div>
+
+        <!-- 🎨 Brand Text -->
+        <div class="loading-brand">
+          <h1 class="brand-main">Face Attendance</h1>
+          <p class="brand-tagline">AI-Powered Recognition</p>
+        </div>
+
+        <!-- 🎨 Progress Section -->
+        <div class="loading-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: {loadingProgress}%"></div>
+            <div class="progress-glow" style="width: {loadingProgress}%"></div>
+            <div class="progress-shine"></div>
+          </div>
+          <div class="progress-text">{loadingText}</div>
+          <div class="progress-percentage">{loadingProgress}%</div>
+        </div>
+
+        <!-- 🎨 Loading Dots Animation -->
+        <div class="loading-dots">
+          <div class="dot dot-1"></div>
+          <div class="dot dot-2"></div>
+          <div class="dot dot-3"></div>
+        </div>
+      </div>
+
+      <!-- 🎨 Floating Geometric Shapes -->
+      <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+      </div>
+    </div>
   {/if}
 
-  {#if showForm}
-    <!-- Registration form -->
-    <form class="form" on:submit|preventDefault={submitForm}>
-      <label>
-        First Name:
-        <input type="text" bind:value={firstName} required />
-      </label>
+  <!-- 🎨 Main Application -->
+  {#if !isLoading}
+    <!-- 🎨 Animated Background -->
+    <div class="animated-background" style="transform: translateY({gradientOffset}px)">
+      <!-- 🎨 Gradient Orbs -->
+      <div class="bg-orb orb-primary"></div>
+      <div class="bg-orb orb-secondary"></div>
+      <div class="bg-orb orb-accent"></div>
+      <div class="bg-orb orb-purple"></div>
 
-      <label>
-        Middle Initial:
-        <input type="text" maxlength="2" bind:value={middleInitial} />
-      </label>
-
-      <label>
-        Surname:
-        <input type="text" bind:value={surname} required />
-      </label>
-
-      <label>
-        Student ID:
-        <input type="text" bind:value={studentId} required />
-      </label>
-
-      <!-- <label>
-        Device Name:
-        <select bind:value={deviceName}>
-          {#each roomList as room}
-            <option value={room.RoomName}>{room.RoomName}</option>
-          {/each}
-        </select>
-      </label> -->
-
-      <div class="actions">
-        <button type="submit" class="submit-btn">Submit</button>
-        <button type="button" class="cancel-btn" on:click={resetForm}>
-          Cancel
-        </button>
+      <!-- 🎨 Floating Elements -->
+      <div class="floating-elements">
+        {#each Array(8) as _, i}
+          <div class="floating-element element-{i % 4 + 1}" style="left: {15 + i * 10}%; animation-delay: {i * 0.5}s"></div>
+        {/each}
       </div>
+    </div>
 
-      <div class="scanner-actions">
-        {#if !scannerActive}
-          <button type="button" class="scan-btn" on:click={startScanner}>
-            📷 Scan QR
+    <!-- 🎨 Main Content Container -->
+    <div class="content-wrapper">
+      <!-- 🎨 Main Menu Screen -->
+      {#if currentScreen === 'main'}
+        <div class="screen-container" class:visible={formVisible}>
+          <!-- 🎨 Brand Header -->
+          <div class="brand-header">
+            <div class="brand-icon">
+              <svg class="school-icon" fill="none" stroke="url(#schoolGradient)" viewBox="0 0 24 24">
+                <defs>
+                  <linearGradient id="schoolGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#3B82F6" />
+                    <stop offset="50%" stop-color="#A855F7" />
+                    <stop offset="100%" stop-color="#22C55E" />
+                  </linearGradient>
+                </defs>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+              </svg>
+            </div>
+            <h1 class="brand-title">School Attendance</h1>
+            <p class="brand-subtitle">Smart face recognition system</p>
+          </div>
+
+          <!-- 🎨 Action Buttons -->
+          <div class="action-buttons">
+            <button class="action-btn login-btn" on:click={() => navigateTo('login')}>
+              <div class="btn-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div class="btn-content">
+                <span class="btn-title">Face Login</span>
+                <span class="btn-subtitle">AI-powered recognition</span>
+              </div>
+              <div class="btn-arrow">→</div>
+            </button>
+
+            <button class="action-btn register-btn" on:click={() => navigateTo('register')}>
+              <div class="btn-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              </div>
+              <div class="btn-content">
+                <span class="btn-title">Register Student</span>
+                <span class="btn-subtitle">Create new profile</span>
+              </div>
+              <div class="btn-arrow">→</div>
+            </button>
+          </div>
+
+          <!-- 🎨 Settings Button -->
+          <button class="settings-fab" on:click={() => navigateTo('settings-auth')}>
+            <svg class="settings-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
           </button>
-        {:else}
-          <button type="button" class="stop-btn" on:click={stopScanner}>
-            ✖ Stop Scanner
-          </button>
-        {/if}
-      </div>
-
-      <div id="qr-reader" class="qr-reader"></div>
-    </form>
-  {/if}
-
-  {#if showFacePage}
-    <div class="face-page" style="position:relative;">
-      <h2>Face Capture Step {faceStep} for {registrationData.firstName} {registrationData.surname}</h2>
-      <!-- Live camera -->
-      <div style="position:relative;display:inline-block;">
-        <video bind:this={video} autoplay muted playsinline class="live-video"></video>
-        <!-- Overlay canvas will be inserted dynamically -->
-      </div>
-      <canvas bind:this={canvas} style="display:none"></canvas>
-      <div class="preview">
-        {#if capturedImages.pic1}
-          <img src={capturedImages.pic1} width="150" alt="Step 1" />
-        {/if}
-        {#if capturedImages.pic2}
-          <img src={capturedImages.pic2} width="150" alt="Step 2" />
-        {/if}
-        {#if capturedImages.pic3}
-          <img src={capturedImages.pic3} width="150" alt="Step 3" />
-        {/if}
-      </div>
-      <!-- Final status only -->
-      {#if faceStep === 4}
-        <p style="font-weight: bold; color: green; font-size: 1.2rem;">
-          ✅ Face capture complete — data saved automatically
-        </p>
+        </div>
       {/if}
-    </div>
-  {/if}
+
+      <!-- 🎨 Registration Form -->
+      {#if currentScreen === 'register'}
+        <div class="form-container" class:visible={formVisible}>
+          <!-- 🎨 Form Header -->
+          <div class="form-header">
+            <button class="back-button" on:click={goBack}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h2 class="form-title">Student Registration</h2>
+            <p class="form-subtitle">Create your attendance profile</p>
+          </div>
+
+          <!-- 🎨 Glass Morphism Form -->
+          <form class="glass-form" on:submit|preventDefault={submitForm}>
+            <div class="form-grid">
+              <!-- First Name -->
+              <div class="input-group">
+                <label class="input-label" for="firstName">First Name</label>
+                <div class="input-wrapper">
+                  <input
+                    id="firstName"
+                    type="text"
+                    bind:value={firstName}
+                    placeholder="Enter first name"
+                    required
+                    class="form-input"
+                  />
+                  <div class="input-glow"></div>
+                </div>
+              </div>
+
+              <!-- Middle Initial -->
+              <div class="input-group">
+                <label class="input-label" for="middleInitial">Middle Initial</label>
+                <div class="input-wrapper">
+                  <input
+                    id="middleInitial"
+                    type="text"
+                    bind:value={middleInitial}
+                    placeholder="M.I."
+                    maxlength="2"
+                    class="form-input"
+                  />
+                  <div class="input-glow"></div>
+                </div>
+              </div>
+
+              <!-- Surname -->
+              <div class="input-group full-width">
+                <label class="input-label" for="surname">Surname</label>
+                <div class="input-wrapper">
+                  <input
+                    id="surname"
+                    type="text"
+                    bind:value={surname}
+                    placeholder="Enter surname"
+                    required
+                    class="form-input"
+                  />
+                  <div class="input-glow"></div>
+                </div>
+              </div>
+
+              <!-- Student ID -->
+              <div class="input-group full-width">
+                <label class="input-label" for="studentId">Student ID</label>
+                <div class="input-wrapper">
+                  <input
+                    id="studentId"
+                    type="text"
+                    bind:value={studentId}
+                    placeholder="Enter student ID"
+                    required
+                    class="form-input"
+                  />
+                  <div class="input-glow"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 🎨 Action Buttons -->
+            <div class="form-actions">
+              <button type="submit" class="primary-btn">
+                <span class="btn-text">Continue to Face Capture</span>
+                <div class="btn-shine"></div>
+              </button>
+
+              <button type="button" class="secondary-btn" on:click={resetForm}>
+                <span class="btn-text">Reset Form</span>
+              </button>
+            </div>
+
+            <!-- 🎨 QR Scanner Section -->
+            <div class="scanner-section">
+              {#if !scannerActive}
+                <button type="button" class="scanner-btn" on:click={startScanner}>
+                  <svg class="scanner-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M12 12l3-3m-3 3l-3-3m-3 6h2.01M12 16v.01M12 12v4" />
+                  </svg>
+                  <span>Scan QR Code</span>
+                </button>
+              {:else}
+                <button type="button" class="scanner-btn active" on:click={stopScanner}>
+                  <span>Stop Scanner</span>
+                </button>
+              {/if}
+            </div>
+
+            <!-- 🎨 QR Reader -->
+            <div id="qr-reader" class="qr-reader"></div>
+          </form>
+        </div>
+      {/if}
+
+      <!-- 🎨 Face Capture Screen -->
+      {#if currentScreen === 'face'}
+        <div class="face-container" class:visible={formVisible}>
+          <div class="face-header">
+            <button class="back-button" on:click={goBack}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h2 class="face-title">Face Capture</h2>
+            <p class="face-subtitle">Step {faceStep} of 3</p>
+          </div>
+
+          <div class="face-content">
+            <div class="camera-container">
+              <video bind:this={video} autoplay muted playsinline class="face-video"></video>
+              <canvas bind:this={canvas} style="display:none"></canvas>
+
+              <div class="face-instruction">
+                <div class="instruction-icon">
+                  {#if faceStep === 1}
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  {:else if faceStep === 2}
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                    </svg>
+                  {:else if faceStep === 3}
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
+                  {/if}
+                </div>
+                <span class="instruction-text">
+                  {#if faceStep === 1}
+                    Look straight ahead
+                  {:else if faceStep === 2}
+                    Turn your face to the RIGHT
+                  {:else if faceStep === 3}
+                    Turn your face to the LEFT
+                  {:else}
+                    Processing complete!
+                  {/if}
+                </span>
+              </div>
+            </div>
+
+            <div class="preview-container">
+              {#if capturedImages.pic1}
+                <div class="preview-item">
+                  <img src={capturedImages.pic1} alt="Step 1" class="preview-image" />
+                  <span class="preview-label">Front</span>
+                </div>
+              {/if}
+              {#if capturedImages.pic2}
+                <div class="preview-item">
+                  <img src={capturedImages.pic2} alt="Step 2" class="preview-image" />
+                  <span class="preview-label">Right</span>
+                </div>
+              {/if}
+              {#if capturedImages.pic3}
+                <div class="preview-item">
+                  <img src={capturedImages.pic3} alt="Step 3" class="preview-image" />
+                  <span class="preview-label">Left</span>
+                </div>
+              {/if}
+            </div>
+
+            {#if faceStep === 4}
+              <div class="completion-message">
+                <div class="completion-icon">✅</div>
+                <h3>Face capture complete!</h3>
+                <p>Your profile has been saved successfully.</p>
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/if}
 
   {#if showLoginPage}
     <div class="login-page">
@@ -946,49 +1243,128 @@
     </div>
   {/if}
 
-  {#if showSettingsAuth}
-    <div class="settings-auth">
-      <h2>Settings Login</h2>
-      <input type="text" placeholder="Username" bind:value={settingsUser} />
-      <input type="password" placeholder="Password" bind:value={settingsPass} />
-      {#if settingsError}
-        <p style="color:red;">{settingsError}</p>
+      <!-- 🎨 Settings Auth Screen -->
+      {#if currentScreen === 'settings-auth'}
+        <div class="auth-form-container" class:visible={formVisible}>
+          <div class="auth-form-header">
+            <button class="back-button" on:click={goBack}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h2 class="auth-form-title">Settings Access</h2>
+            <p class="auth-form-subtitle">Enter admin credentials</p>
+          </div>
+
+          <form class="auth-glass-form" on:submit|preventDefault={checkSettingsLogin}>
+            <div class="auth-input-group">
+              <label class="auth-input-label" for="settingsUser">Username</label>
+              <div class="auth-input-wrapper">
+                <input
+                  id="settingsUser"
+                  type="text"
+                  bind:value={settingsUser}
+                  placeholder="Enter username"
+                  class="auth-form-input"
+                />
+                <div class="auth-input-glow"></div>
+              </div>
+            </div>
+
+            <div class="auth-input-group">
+              <label class="auth-input-label" for="settingsPass">Password</label>
+              <div class="auth-input-wrapper">
+                <input
+                  id="settingsPass"
+                  type="password"
+                  bind:value={settingsPass}
+                  placeholder="Enter password"
+                  class="auth-form-input"
+                />
+                <div class="auth-input-glow"></div>
+              </div>
+            </div>
+
+            {#if settingsError}
+              <div class="error-message">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{settingsError}</span>
+              </div>
+            {/if}
+
+            <button type="submit" class="auth-submit-btn">
+              <span class="btn-text">Access Settings</span>
+              <div class="btn-shine"></div>
+            </button>
+          </form>
+        </div>
       {/if}
-      <div class="actions">
-        <button on:click={checkSettingsLogin}>Enter</button>
-        <button on:click={() => showSettingsAuth = false}>Cancel</button>
-      </div>
+
+      <!-- 🎨 Settings Screen -->
+      {#if currentScreen === 'settings'}
+        <div class="settings-container" class:visible={formVisible}>
+          <div class="settings-header">
+            <button class="back-button" on:click={goBack}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h2 class="settings-title">System Settings</h2>
+            <p class="settings-subtitle">Configure attendance system</p>
+          </div>
+
+          <div class="settings-content">
+            <form class="settings-form" on:submit|preventDefault={saveDeviceName}>
+              <div class="settings-group">
+                <label class="settings-label" for="deviceName">Device Name (Room)</label>
+                <div class="settings-select-wrapper">
+                  <select id="deviceName" bind:value={deviceName} class="settings-select">
+                    {#each roomList as room}
+                      <option value={room.RoomName}>{room.RoomName}</option>
+                    {/each}
+                  </select>
+                  <div class="select-arrow">▼</div>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <label class="settings-label" for="selectedSubject">Subject</label>
+                <div class="settings-select-wrapper">
+                  <select id="selectedSubject" bind:value={selectedSubject} class="settings-select">
+                    {#each subjectList as subject}
+                      <option value={subject.SubjectName}>{subject.SubjectName}</option>
+                    {/each}
+                  </select>
+                  <div class="select-arrow">▼</div>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <label class="settings-label" for="serverUrl">Server URL</label>
+                <div class="settings-input-wrapper">
+                  <input
+                    id="serverUrl"
+                    type="text"
+                    bind:value={SERVER_URL}
+                    class="settings-input"
+                    placeholder="API endpoint URL"
+                  />
+                  <div class="settings-input-glow"></div>
+                </div>
+              </div>
+
+              <button type="submit" class="settings-save-btn">
+                <span class="btn-text">Save Settings</span>
+                <div class="btn-shine"></div>
+              </button>
+            </form>
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
-
-  {#if showSettingsPage}
-    <div class="settings-page">
-      <h2>⚙ Settings</h2>
-      <p>Here you can configure admin or system settings.</p>
-      <label>
-        Device Name:
-        <select bind:value={deviceName}>
-          {#each roomList as room}
-            <option value={room.RoomID}>{room.RoomName}</option>
-          {/each}
-        </select>
-      </label>
-      <label>
-        Subject:
-        <select bind:value={selectedSubject}>
-          {#each subjectList as subject}
-            <option value={subject.SubjectID}>{subject.SubjectName}</option>
-          {/each}
-        </select>
-      </label>
-      <label>
-        Server URL:
-        <input type="text" bind:value={SERVER_URL} />
-      </label>
-      <button on:click={closeSettings}>Back</button>
-    </div>
-  {/if}
-
 </div>
 
 <style>
@@ -996,145 +1372,989 @@
     width: 740px;
     height: 990px;
     display: flex;
-    flex-direction: column; 
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: #f9f9f9;
+    z-index: 9999;
+    opacity: 1;
+    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .big-btn {
-    font-size: 2rem;
-    margin: 10px 0; 
-    padding: 20px 40px;
-    border: none;
-    border-radius: 12px;
-    background: #0077cc;
+  .loading-screen.fade-out {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .loading-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .gradient-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.6;
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .orb-1 {
+    width: 300px;
+    height: 300px;
+    background: linear-gradient(45deg, #ff6b6b, #ffa500);
+    top: 10%;
+    left: 10%;
+    animation-delay: 0s;
+  }
+
+  .orb-2 {
+    width: 250px;
+    height: 250px;
+    background: linear-gradient(45deg, #4ecdc4, #44a08d);
+    top: 60%;
+    right: 10%;
+    animation-delay: 2s;
+  }
+
+  .orb-3 {
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(45deg, #a855f7, #7c3aed);
+    bottom: 20%;
+    left: 20%;
+    animation-delay: 4s;
+  }
+
+  .orb-4 {
+    width: 180px;
+    height: 180px;
+    background: linear-gradient(45deg, #22c55e, #16a34a);
+    top: 30%;
+    right: 30%;
+    animation-delay: 1s;
+  }
+
+  .orb-5 {
+    width: 220px;
+    height: 220px;
+    background: linear-gradient(45deg, #f97316, #ea580c);
+    bottom: 10%;
+    right: 20%;
+    animation-delay: 3s;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-20px) rotate(180deg); }
+  }
+
+  .particles-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .particle {
+    position: absolute;
+    border-radius: 50%;
+    animation: particleFloat 8s ease-in-out infinite;
+  }
+
+  .particle-1 { background: rgba(255, 107, 107, 0.8); width: 8px; height: 8px; }
+  .particle-2 { background: rgba(78, 205, 196, 0.8); width: 6px; height: 6px; }
+  .particle-3 { background: rgba(168, 85, 247, 0.8); width: 10px; height: 10px; }
+  .particle-4 { background: rgba(34, 197, 94, 0.8); width: 7px; height: 7px; }
+  .particle-5 { background: rgba(249, 115, 22, 0.8); width: 9px; height: 9px; }
+
+  @keyframes particleFloat {
+    0%, 100% {
+      transform: translateY(0px) scale(1);
+      opacity: 0.8;
+    }
+    50% {
+      transform: translateY(-100px) scale(1.2);
+      opacity: 0.4;
+    }
+  }
+
+  .loading-content {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    max-width: 400px;
+    padding: 2rem;
+  }
+
+  .loading-logo {
+    margin-bottom: 2rem;
+  }
+
+  .logo-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1rem;
+    position: relative;
+  }
+
+  .face-icon {
+    width: 100%;
+    height: 100%;
+    animation: logoPulse 2s ease-in-out infinite;
+  }
+
+  .logo-pulse {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    right: -10px;
+    bottom: -10px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    animation: logoPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes logoPulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.5;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 1;
+    }
+  }
+
+  .loading-brand {
+    margin-bottom: 3rem;
+  }
+
+  .brand-main {
+    font-size: 2.5rem;
+    font-weight: 700;
     color: white;
-    cursor: pointer;
+    margin: 0 0 0.5rem 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    letter-spacing: -0.02em;
   }
 
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    width: 80%;
-    max-width: 500px;
+  .brand-tagline {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0;
+    font-weight: 400;
   }
 
-  label {
-    font-size: 1.2rem;
-    display: flex;
-    flex-direction: column;
+  .loading-progress {
+    margin-bottom: 2rem;
   }
 
-  input {
-    padding: 12px;
-    font-size: 1.2rem;
-    border: 1px solid #ccc;
-    border-radius: 8px;
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    position: relative;
   }
 
-  select {
-    padding: 12px;
-    font-size: 1.2rem;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    background: white;
-    cursor: pointer;
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff6b6b, #ffa500, #4ecdc4, #a855f7, #22c55e);
+    background-size: 200% 100%;
+    animation: progressShine 2s ease-in-out infinite;
+    transition: width 0.3s ease;
+    border-radius: 3px;
   }
 
-  .actions {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
+  .progress-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: progressGlow 1.5s ease-in-out infinite;
   }
 
-  .submit-btn {
-    flex: 1;
-    background: #28a745;
+  .progress-shine {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    animation: progressShine 2s ease-in-out infinite;
+  }
+
+  @keyframes progressGlow {
+    0%, 100% { opacity: 0; transform: translateX(-100%); }
+    50% { opacity: 1; transform: translateX(0%); }
+  }
+
+  @keyframes progressShine {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+
+  .progress-text {
     color: white;
-    border: none;
-    padding: 15px;
-    border-radius: 8px;
-    font-size: 1.2rem;
-    cursor: pointer;
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
   }
 
-  .cancel-btn {
-    flex: 1;
-    background: #dc3545;
-    color: white;
-    border: none;
-    padding: 15px;
-    border-radius: 8px;
-    font-size: 1.2rem;
-    cursor: pointer;
+  .progress-percentage {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    font-weight: 400;
   }
 
-  .scanner-actions {
-    margin-top: 10px;
+  .loading-dots {
     display: flex;
     justify-content: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: white;
+    animation: dotBounce 1.4s ease-in-out infinite;
+  }
+
+  .dot-1 { animation-delay: 0s; }
+  .dot-2 { animation-delay: 0.2s; }
+  .dot-3 { animation-delay: 0.4s; }
+
+  @keyframes dotBounce {
+    0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  .floating-shapes {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .shape {
+    position: absolute;
+    opacity: 0.1;
+    animation: shapeFloat 10s ease-in-out infinite;
+  }
+
+  .shape-1 {
+    top: 20%;
+    left: 10%;
+    width: 60px;
+    height: 60px;
+    background: #ff6b6b;
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    animation-delay: 0s;
+  }
+
+  .shape-2 {
+    top: 70%;
+    right: 15%;
+    width: 40px;
+    height: 40px;
+    background: #4ecdc4;
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+    animation-delay: 3s;
+  }
+
+  .shape-3 {
+    bottom: 30%;
+    left: 70%;
+    width: 50px;
+    height: 50px;
+    background: #a855f7;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    animation-delay: 6s;
+  }
+
+  .shape-4 {
+    top: 50%;
+    left: 80%;
+    width: 35px;
+    height: 35px;
+    background: #22c55e;
+    border-radius: 50%;
+    animation-delay: 9s;
+  }
+
+  @keyframes shapeFloat {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    33% { transform: translateY(-30px) rotate(120deg); }
+    50% { transform: translateY(-25px) rotate(180deg); }
+    75% { transform: translateY(-75px) rotate(270deg); }
+  }
+
+  /* 🎨 Animated Background */
+  .animated-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .bg-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.3;
+    animation: bgOrbFloat 8s ease-in-out infinite;
+  }
+
+  .orb-primary {
+    width: 400px;
+    height: 400px;
+    background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+    top: -10%;
+    left: -10%;
+    animation-delay: 0s;
+  }
+
+  .orb-secondary {
+    width: 300px;
+    height: 300px;
+    background: linear-gradient(45deg, #a855f7, #7c3aed);
+    top: 60%;
+    right: -5%;
+    animation-delay: 2s;
+  }
+
+  .orb-accent {
+    width: 250px;
+    height: 250px;
+    background: linear-gradient(45deg, #22c55e, #16a34a);
+    bottom: -5%;
+    left: 50%;
+    animation-delay: 4s;
+  }
+
+  .orb-purple {
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(45deg, #f97316, #ea580c);
+    top: 20%;
+    right: 20%;
+    animation-delay: 6s;
+  }
+
+  @keyframes bgOrbFloat {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.1) rotate(180deg); }
+  }
+
+  .floating-elements {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .floating-element {
+    position: absolute;
+    opacity: 0.1;
+    animation: elementFloat 12s ease-in-out infinite;
+  }
+
+  .element-1 {
+    width: 20px;
+    height: 30px;
+    background: #3b82f6;
+    border-radius: 50% 50% 50% 0;
+  }
+
+  .element-2 {
+    width: 15px;
+    height: 40px;
+    background: #a855f7;
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  }
+
+  .element-3 {
+    width: 25px;
+    height: 25px;
+    background: #22c55e;
+    transform: rotate(45deg);
+  }
+
+  .element-4 {
+    width: 18px;
+    height: 18px;
+    background: #f97316;
+    border-radius: 50%;
+  }
+
+  @keyframes elementFloat {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    25% { transform: translateY(-50px) rotate(90deg); }
+    50% { transform: translateY(-25px) rotate(180deg); }
+    75% { transform: translateY(-75px) rotate(270deg); }
+  }
+
+  /* 🎨 Content Wrapper */
+  .content-wrapper {
+    position: relative;
+    z-index: 10;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  /* 🎨 Screen Container */
+  .screen-container {
+    width: 100%;
+    max-width: 500px;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .screen-container.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* 🎨 Brand Header */
+  .brand-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .brand-icon {
+    margin-bottom: 1.5rem;
+  }
+
+  .school-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto;
+  }
+
+  .brand-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: white;
+    margin: 0 0 0.5rem 0;
+    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+    letter-spacing: -0.02em;
+  }
+
+  .brand-subtitle {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0;
+    font-weight: 400;
+  }
+
+  /* 🎨 Action Buttons */
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 1rem;
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
+
+  .action-btn:hover::before {
+    left: 100%;
+  }
+
+  .action-btn:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .btn-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    background: rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+  }
+
+  .btn-content {
+    flex: 1;
+  }
+
+  .btn-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+    display: block;
+  }
+
+  .btn-subtitle {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin: 0;
+    display: block;
+  }
+
+  .btn-arrow {
+    font-size: 1.5rem;
+    font-weight: bold;
+    opacity: 0.7;
+    transition: all 0.3s ease;
+  }
+
+  .action-btn:hover .btn-arrow {
+    opacity: 1;
+    transform: translateX(5px);
+  }
+
+  .login-btn .btn-icon {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  }
+
+  .register-btn .btn-icon {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+  }
+
+  /* 🎨 Settings FAB */
+  .settings-fab {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
+
+  .settings-fab:hover {
+    transform: scale(1.1) rotate(180deg);
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .settings-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* 🎨 Form Containers */
+  .form-container, .face-container, .login-container, .auth-form-container, .settings-container {
+    width: 100%;
+    max-width: 500px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 1.5rem;
+    padding: 2rem;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .form-container.visible, .face-container.visible, .login-container.visible,
+  .auth-form-container.visible, .settings-container.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  /* 🎨 Form Headers */
+  .form-header, .face-header, .login-header, .auth-form-header, .settings-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    position: relative;
+  }
+
+  .back-button {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .back-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  .back-button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .form-title, .face-title, .login-title, .auth-form-title, .settings-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: white;
+    margin: 0 0 0.5rem 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  .form-subtitle, .face-subtitle, .login-subtitle, .auth-form-subtitle, .settings-subtitle {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0;
+    font-weight: 400;
+  }
+
+  /* 🎨 Glass Form */
+  .glass-form, .auth-glass-form {
+    width: 100%;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .input-group, .auth-input-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .full-width {
+    grid-column: 1 / -1;
+  }
+
+  .input-label, .auth-input-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.01em;
+  }
+
+  .input-wrapper, .auth-input-wrapper {
+    position: relative;
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+  }
+
+  .input-wrapper:focus-within, .auth-input-wrapper:focus-within {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .form-input, .auth-form-input {
+    width: 100%;
+    padding: 1rem;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1rem;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .form-input::placeholder, .auth-form-input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .input-glow, .auth-input-glow {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #a855f7, #22c55e);
+    transition: width 0.3s ease;
+  }
+
+  .input-wrapper:focus-within .input-glow,
+  .auth-input-wrapper:focus-within .auth-input-glow {
+    width: 100%;
+  }
+
+  /* 🎨 Form Actions */
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .primary-btn, .auth-submit-btn {
+    flex: 1;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #3b82f6, #a855f7);
+    border: none;
+    border-radius: 0.75rem;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+  }
+
+  /* 🎨 QR Reader */
+  .qr-reader {
+    width: 100%;
+    max-width: 300px;
+    margin: 1rem auto 0;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  /* 🎨 Face Capture */
+  .face-content {
+    width: 100%;
+  }
+
+  .camera-container {
+    position: relative;
+    margin-bottom: 2rem;
+  }
+
+  .face-video {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    border-radius: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .face-instruction {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    right: 1rem;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .instruction-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .instruction-icon svg {
+    width: 18px;
+    height: 18px;
+    color: white;
+  }
+
+  .instruction-text {
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .preview-container {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .preview-item {
+    text-align: center;
+  }
+
+  .preview-image {
+    width: 80px;
+    height: 80px;
+    border-radius: 0.75rem;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .preview-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-top: 0.5rem;
+  }
+
+  .completion-message {
+    text-align: center;
+    padding: 2rem;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 1rem;
+  }
+
+  .completion-message .completion-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    display: block;
+  }
+
+  .completion-message h3 {
+    color: white;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .completion-message p {
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0;
+  }
+
+  /* 🎨 Login Camera */
+  .camera-section {
+    margin-bottom: 2rem;
+  }
+
+  .camera-wrapper {
+    position: relative;
+    margin-bottom: 1.5rem;
+  }
+
+  .login-video {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    border-radius: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .camera-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+  }
+
+  .scan-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 150px;
+    border: 2px solid rgba(59, 130, 246, 0.6);
+    border-radius: 0.75rem;
+    overflow: hidden;
+  }
+
+  .scan-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+    animation: scanMove 2s ease-in-out infinite;
+  }
+
+  @keyframes scanMove {
+    0%, 100% { top: 0; opacity: 0; }
+    50% { top: 100%; opacity: 1; }
+  }
+
+  .login-actions {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
   }
 
   .scan-btn {
-    background: #0077cc;
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-  }
-
-  .stop-btn {
-    background: #ff9800;
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-  }
-
-  .qr-reader {
-    width: 100%;
-    max-width: 400px;
-    margin-top: 1rem;
-    transform: scaleX(-1); /* mirrors horizontally */
-    border: 2px solid #0077cc;
-    border-radius: 8px;
-  }
-
-  .face-page {
-    display: flex;
-    flex-direction: column;
+    display: inline-flex;
     align-items: center;
-  }
-
-  video {
-    width: 480px;
-    border: 2px solid #0077cc;
-    border-radius: 8px;
-    transform: scaleX(-1); /* mirrors horizontally */
-    margin-top: 1rem;
-  }
-
-  .preview img {
-    max-width: 300px;
-    border: 2px solid #0077cc;
-    border-radius: 8px;
-    margin-top: 10px;
-  }
-
-  button {
-    margin: 1rem 0;
-    padding: 12px 24px;
-    font-size: 1.2rem;
-    border-radius: 8px;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
     border: none;
-    background: #0077cc;
+    border-radius: 0.75rem;
     color: white;
+    font-size: 1rem;
+    font-weight: 600;
     cursor: pointer;
   }
   video {
@@ -1142,53 +2362,189 @@
     max-width: 640px;
     border-radius: 8px;
   }
-  .live-video {
-    width: 320px;      /* or whatever size you want */
-    border: 2px solid #000;
-    border-radius: 8px;
+
+  .scan-icon {
+    width: 20px;
+    height: 20px;
   }
 
-  .settings-auth, .settings-page {
+  /* 🎨 Recognition Result */
+  .recognition-result {
+    padding: 1.5rem;
+    border-radius: 1rem;
+    border: 1px solid;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    animation: resultSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .recognition-result.success {
+    border-color: rgba(34, 197, 94, 0.5);
+    background: rgba(34, 197, 94, 0.1);
+  }
+
+  .recognition-result.error {
+    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  @keyframes resultSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .result-image {
+    width: 60px;
+    height: 60px;
+    border-radius: 0.75rem;
+    object-fit: cover;
+    border: 2px solid currentColor;
+    flex-shrink: 0;
+  }
+
+  .result-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .result-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    max-width: 400px;
-    background: #fff;
-    padding: 2rem;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    margin-top: 2rem;
+    flex-shrink: 0;
   }
-  .settings-auth input {
-    width: 100%;
-    padding: 10px;
-    margin: 8px 0;
+
+  .result-icon svg {
+    width: 18px;
+    height: 18px;
+    color: white;
+  }
+
+  .result-text {
+    flex: 1;
+  }
+
+  .result-message {
+    color: white;
     font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.4;
   }
-  .settings-page input {
-    width: 100%;
-    padding: 10px;
-    font-size: 1rem;
-    margin-top: 0.5rem;
-  }
-  .settings-page label {
-    width: 100%;
-    font-size: 1.1rem;
+
+  /* 🎨 Error Message */
+  .error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.75rem;
+    color: #fca5a5;
+    font-size: 0.9rem;
+    font-weight: 500;
     margin-bottom: 1rem;
   }
-  .settings-btn {
-    position: absolute;
-    bottom: 200px; 
-    right: 30px;        
-    width: 50px;
-    height: 50px;
-    font-size: 1.6rem;
-    border: none;
-    border-radius: 50%;
-    background-color: #444;
+
+  .error-message svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  /* 🎨 Settings Form */
+  .settings-form {
+    width: 100%;
+  }
+
+  .settings-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .settings-label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0.5rem;
+  }
+
+  .settings-select-wrapper, .settings-input-wrapper {
+    position: relative;
+  }
+
+  .settings-select, .settings-input {
+    width: 100%;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.75rem;
     color: white;
+    font-size: 1rem;
+    outline: none;
+    font-family: inherit;
+    transition: all 0.3s ease;
+  }
+
+  .settings-select:focus, .settings-input:focus {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .settings-select::placeholder, .settings-input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .select-arrow {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 255, 255, 0.6);
+    pointer-events: none;
+  }
+
+  .settings-input-glow {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    width: 0%;
+    background: linear-gradient(90deg, #3b82f6, #a855f7, #22c55e);
+    transition: width 0.3s ease;
+  }
+
+  .settings-input-wrapper:focus-within .settings-input-glow {
+    width: 100%;
+  }
+
+  .settings-save-btn {
+    width: 100%;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: none;
+    border-radius: 0.75rem;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
     cursor: pointer;
     box-shadow: 0 4px 8px rgba(0,0,0,0.25);
     transition: background 0.2s, transform 0.2s;
