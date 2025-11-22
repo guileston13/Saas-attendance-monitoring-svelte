@@ -101,7 +101,7 @@
 	.app {
 		min-height: 100vh;
 		display: flex;
-		background: #ecf0f1;
+		background: transparent;
 	}
 
 	/* Mobile Header */
@@ -193,7 +193,7 @@
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		background: #ecf0f1;
+		background: transparent;
 	}
 
 	/* Mobile Responsive */

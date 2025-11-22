@@ -1,20 +1,28 @@
 <script>
   import { page } from '$app/stores';
+  
+  // Access error information from page store
+  $: error = $page.error;
+  $: status = $page.status;
 </script>
 
 <svelte:head>
-  <title>Access Denied - Attendance System</title>
+  <title>Error - Attendance System</title>
 </svelte:head>
 
 <div class="error-container">
   <div class="error-content">
-    <h1>🚫 Access Denied</h1>
-    <p>This attendance system is restricted to authorized devices and locations only.</p>
+    <h1>🚫 {status === 403 ? 'Access Denied' : 'Error'}</h1>
+    <p>{error?.message || 'An error occurred'}</p>
 
-    {#if $page.status === 403}
+    {#if status === 403}
       <div class="error-details">
         <p><strong>Reason:</strong> Your IP address is not authorized to access this system.</p>
         <p>Please contact your system administrator if you believe this is an error.</p>
+      </div>
+    {:else if status === 500}
+      <div class="error-details">
+        <p><strong>Server Error:</strong> Please try again later or contact support.</p>
       </div>
     {/if}
 

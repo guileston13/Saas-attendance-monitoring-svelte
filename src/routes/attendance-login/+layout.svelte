@@ -1,5 +1,6 @@
 <script>
   // Attendance login layout - no sidebar, full screen
+  // No props needed - this is just a layout wrapper
 </script>
 
 <svelte:head>
@@ -13,7 +14,7 @@
 <style>
   .attendance-layout {
     min-height: 100vh;
-    background: #f9f9f9;
+    background: transparent;
     display: flex;
     justify-content: center;
     align-items: center;

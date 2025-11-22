@@ -1,10 +1,12 @@
 // src/routes/attendance-login/+page.server.js
-export async function load({ request }) {
+export async function load() {
     const DEV_MODE = true; // ✅ allow all local access
 
     if (DEV_MODE) {
         console.log('DEV_MODE: bypassing IP checks');
-        return { session: { user: 'dev' } };
+        return { 
+            session: { user: 'dev' }
+        };
     }
 
     // Production: check client IP if needed
@@ -14,5 +16,7 @@ export async function load({ request }) {
     //     throw error(403, 'Access denied.');
     // }
 
-    return {};
+    return {
+        session: null
+    };
 }
