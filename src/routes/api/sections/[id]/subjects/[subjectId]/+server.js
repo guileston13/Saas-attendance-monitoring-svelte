@@ -1,6 +1,33 @@
 // API endpoint to update subject assignment in a section
 import { getSessionFromCookies, isAuthenticated, hasRole } from '../../../../../../lib/auth.js';
 import { executeQuery } from '../../../../../../services/database.js';
+import { getSubjectEnrollments } from '../../../../../../services/sectionService.js';
+
+export async function GET({ params }) {
+	try {
+		const sectionId = parseInt(params.id);
+		const subjectId = parseInt(params.subjectId);
+		
+		if (isNaN(sectionId) || isNaN(subjectId)) {
+			return new Response(JSON.stringify({ error: 'Invalid section or subject ID' }), {
+				status: 400,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+		
+		const students = await getSubjectEnrollments(sectionId, subjectId);
+		return new Response(JSON.stringify(students), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	} catch (error) {
+		console.error('Error fetching enrolled students:', error);
+		return new Response(JSON.stringify({ error: 'Failed to fetch enrolled students' }), {
+			status: 500,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+}
 
 export async function PUT({ request, params }) {
 	console.log('PUT request received for subject update:', params);

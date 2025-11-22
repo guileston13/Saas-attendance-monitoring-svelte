@@ -4,6 +4,7 @@ import { getSessionFromCookies, isAuthenticated, hasRole } from '../../lib/auth.
 import { getAllSections, getSectionById, getSectionSubjects, createSection, updateSection, deleteSection } from '../../services/sectionService.js';
 import { getAllSubjects } from '../../services/subjectService.js';
 import { getAllTeachers } from '../../services/teacherService.js';
+import { getAllStudents, addStudentToSection, getStudentsBySection } from '../../services/studentService.js';
 import { executeQuery } from '../../services/database.js';
 
 /** @type {import('./$types').PageServerLoad} */
@@ -40,13 +41,15 @@ export async function load({ request, url }) {
 		let teachers = [];
 		let statuses = [];
 		let rooms = [];
+		let students = [];
 		
 		if (hasRole(session, 'Admin')) {
-			[subjects, teachers, statuses, rooms] = await Promise.all([
+			[subjects, teachers, statuses, rooms, students] = await Promise.all([
 				getAllSubjects(),
 				getAllTeachers(),
 				executeQuery('SELECT * FROM status ORDER BY StatusName'),
-				executeQuery('SELECT RoomID, RoomName FROM room ORDER BY RoomName')
+				executeQuery('SELECT RoomID, RoomName FROM room ORDER BY RoomName'),
+				getAllStudents()
 			]);
 		}
 		
@@ -59,6 +62,7 @@ export async function load({ request, url }) {
 			teachers,
 			statuses,
 			rooms,
+			students,
 			currentSection: selectedSection ? selectedSection.SectionName : 'Sections'
 		};
 	} catch (error) {
@@ -72,6 +76,7 @@ export async function load({ request, url }) {
 			teachers: [],
 			statuses: [],
 			rooms: [],
+			students: [],
 			error: 'Failed to load sections data',
 			currentSection: 'Sections'
 		};
@@ -149,6 +154,80 @@ export const actions = {
 		} catch (error) {
 			console.error('Delete section error:', error);
 			return { success: false, error: 'Failed to delete section' };
+		}
+	},
+	
+	enrollStudents: async ({ request }) => {
+		const session = getSessionFromCookies(request.headers.get('cookie'));
+		
+		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
+			return { success: false, error: 'Unauthorized' };
+		}
+		
+		try {
+			const data = await request.formData();
+			const sectionId = parseInt(data.get('sectionId'));
+			const subjectId = parseInt(data.get('subjectId'));
+			const studentIds = data.get('studentIds');
+			
+			if (!sectionId || !subjectId || !studentIds) {
+				return { success: false, error: 'Section ID, Subject ID, and student IDs are required' };
+			}
+			
+			const studentIdArray = JSON.parse(studentIds);
+			
+			// Import the enrollment function
+			const { enrollStudentInSubject } = await import('../../services/sectionService.js');
+			
+			let successCount = 0;
+			let failCount = 0;
+			
+			for (const studentId of studentIdArray) {
+				try {
+					await enrollStudentInSubject(sectionId, subjectId, studentId);
+					successCount++;
+				} catch (error) {
+					console.warn(`Student ${studentId} enrollment failed:`, error.message);
+					failCount++;
+				}
+			}
+			
+			return { 
+				success: true, 
+				message: `Successfully enrolled ${successCount} student(s)${failCount > 0 ? `, ${failCount} failed (may already be enrolled)` : ''}`
+			};
+		} catch (error) {
+			console.error('Enroll students error:', error);
+			return { success: false, error: 'Failed to enroll students' };
+		}
+	},
+	
+	unenrollStudent: async ({ request }) => {
+		const session = getSessionFromCookies(request.headers.get('cookie'));
+		
+		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
+			return { success: false, error: 'Unauthorized' };
+		}
+		
+		try {
+			const data = await request.formData();
+			const sectionId = parseInt(data.get('sectionId'));
+			const subjectId = parseInt(data.get('subjectId'));
+			const studentId = data.get('studentId');
+			
+			if (!sectionId || !subjectId || !studentId) {
+				return { success: false, error: 'Section ID, Subject ID, and student ID are required' };
+			}
+			
+			// Import the unenrollment function
+			const { unenrollStudentFromSubject } = await import('../../services/sectionService.js');
+			
+			await unenrollStudentFromSubject(sectionId, subjectId, studentId);
+			
+			return { success: true, message: 'Student unenrolled successfully' };
+		} catch (error) {
+			console.error('Unenroll student error:', error);
+			return { success: false, error: 'Failed to unenroll student' };
 		}
 	}
 };

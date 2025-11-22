@@ -11,12 +11,17 @@
 	$: statuses = data.statuses || [];
 	$: subjects = data.subjects || [];
 	$: teachers = data.teachers || [];
+	$: students = data.students || [];
+	
+	let sectionSubjects = [];
 
 	let showCreateModal = false;
 	let showSubjectModal = false;
 	let showStudentModal = false;
+	let showSubjectSelectionModal = false;
 	let editingSection = null;
 	let selectedSection = null;
+	let selectedSubject = null;
 	let selectedCount = 0;
 	let loading = false;
 	let searching = false;
@@ -33,6 +38,23 @@
 	let cardsVisible = false;
 	let scrollY = 0;
 	let selectedStudents = new Set();
+	let enrolledStudents = [];
+	let studentSearchTerm = '';
+
+	$: availableStudents = students.filter(student => {
+		const isEnrolled = enrolledStudents.some(e => e.StudentID === student.StudentID);
+		const matchesSearch = studentSearchTerm === '' || 
+			`${student.FirstName} ${student.LastName}`.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+			student.StudentID.toLowerCase().includes(studentSearchTerm.toLowerCase());
+		return !isEnrolled && matchesSearch;
+	});
+
+	$: filteredEnrolledStudents = enrolledStudents.filter(student => {
+		const matchesSearch = studentSearchTerm === '' ||
+			`${student.FirstName} ${student.LastName}`.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+			student.StudentID.toLowerCase().includes(studentSearchTerm.toLowerCase());
+		return matchesSearch;
+	});
 
 	onMount(() => {
 		const loadingSteps = [
@@ -95,6 +117,21 @@
 	function selectSectionItem(sectionId) {
 		selectedSection = sections.find(s => s.SectionID === sectionId);
 		selectedStudents.clear();
+		loadSectionSubjects(sectionId);
+	}
+
+	async function loadSectionSubjects(sectionId) {
+		try {
+			const response = await fetch(`/api/sections/${sectionId}/subjects`);
+			if (response.ok) {
+				sectionSubjects = await response.json();
+			} else {
+				sectionSubjects = [];
+			}
+		} catch (error) {
+			console.error('Error loading section subjects:', error);
+			sectionSubjects = [];
+		}
 	}
 
 	function openSubjectModal() {
@@ -113,6 +150,54 @@
 		showStudentModal = false;
 		selectedStudents.clear();
 		selectedCount = 0;
+		studentSearchTerm = '';
+	}
+
+	function openSubjectSelectionModal() {
+		console.log('Opening subject selection modal');
+		showSubjectSelectionModal = true;
+	}
+
+	function closeSubjectSelectionModal() {
+		console.log('Closing subject selection modal');
+		showSubjectSelectionModal = false;
+	}
+
+	function selectSubjectForEnrollment(subject) {
+		console.log('Subject selected:', subject);
+		selectedSubject = subject;
+		closeSubjectSelectionModal();
+		loadEnrolledStudents();
+		openStudentModal();
+	}
+
+	async function loadEnrolledStudents() {
+		if (!selectedSection || !selectedSubject) return;
+		
+		try {
+			const response = await fetch(`/api/sections/${selectedSection.SectionID}/subjects/${selectedSubject.SubjectID}`);
+			if (response.ok) {
+				enrolledStudents = await response.json();
+			} else {
+				enrolledStudents = [];
+			}
+		} catch (error) {
+			console.error('Error loading enrolled students:', error);
+			enrolledStudents = [];
+		}
+	}
+
+	function handleEnrollClick(event, sectionId) {
+		console.log('Enroll button clicked for section:', sectionId);
+		event.stopPropagation();
+		selectSectionItem(sectionId);
+		openSubjectSelectionModal();
+	}
+
+	function handleEditClick(event, section) {
+		console.log('Edit button clicked for section:', section);
+		event.stopPropagation();
+		editSection(section);
 	}
 
 	$: filteredSections = sections.filter(section =>
@@ -125,7 +210,80 @@
 		} else {
 			selectedStudents.add(studentId);
 		}
+		selectedStudents = selectedStudents;
 		selectedCount = selectedStudents.size;
+	}
+
+	async function handleEnrollStudents() {
+		if (selectedStudents.size === 0) {
+			alert('Please select at least one student to enroll');
+			return;
+		}
+
+		if (!selectedSubject) {
+			alert('Please select a subject');
+			return;
+		}
+
+		enrolling = true;
+		
+		const formData = new FormData();
+		formData.append('sectionId', selectedSection.SectionID);
+		formData.append('subjectId', selectedSubject.SubjectID);
+		formData.append('studentIds', JSON.stringify(Array.from(selectedStudents)));
+
+		try {
+			const response = await fetch('?/enrollStudents', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+			
+			if (result.type === 'success') {
+				selectedStudents.clear();
+				selectedCount = 0;
+				await loadEnrolledStudents();
+				await invalidateAll();
+			} else {
+				alert(result.data?.error || 'Failed to enroll students');
+			}
+		} catch (error) {
+			console.error('Enrollment error:', error);
+			alert('An error occurred while enrolling students');
+		} finally {
+			enrolling = false;
+		}
+	}
+
+	async function handleUnenrollStudent(studentId) {
+		if (!confirm('Are you sure you want to unenroll this student?')) {
+			return;
+		}
+
+		try {
+			const formData = new FormData();
+			formData.append('sectionId', selectedSection.SectionID);
+			formData.append('subjectId', selectedSubject.SubjectID);
+			formData.append('studentId', studentId);
+
+			const response = await fetch('?/unenrollStudent', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+			
+			if (result.type === 'success') {
+				await loadEnrolledStudents();
+				await invalidateAll();
+			} else {
+				alert(result.data?.error || 'Failed to unenroll student');
+			}
+		} catch (error) {
+			console.error('Unenroll error:', error);
+			alert('An error occurred while unenrolling student');
+		}
 	}
 </script>
 
@@ -322,8 +480,9 @@
 							</div>
 							<div class="card-actions">
 								<button 
+									type="button"
 									class="btn btn-secondary"
-									on:click={() => editSection(section)}
+									on:click={(e) => handleEditClick(e, section)}
 								>
 									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -332,8 +491,9 @@
 									Edit
 								</button>
 								<button 
+									type="button"
 									class="btn btn-primary"
-									on:click={() => {selectSectionItem(section.SectionID); openStudentModal();}}
+									on:click={(e) => handleEnrollClick(e, section.SectionID)}
 								>
 									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -496,12 +656,12 @@
 	</div>
 {/if}
 
-<!-- Enroll Students Modal -->
-{#if showStudentModal}
+<!-- Subject Selection Modal for Enrollment -->
+{#if showSubjectSelectionModal}
 	<div 
 		class="modal-overlay" 
-		on:click={closeStudentModal}
-		on:keydown={(e) => e.key === 'Escape' && closeStudentModal()}
+		on:click={closeSubjectSelectionModal}
+		on:keydown={(e) => e.key === 'Escape' && closeSubjectSelectionModal()}
 		role="button"
 		tabindex="0"
 		aria-label="Close modal"
@@ -513,21 +673,285 @@
 			tabindex="-1"
 		>
 			<div class="modal-header">
-				<h3>Enroll Students - {selectedSection?.SectionName || ''}</h3>
-				<button class="close-btn" on:click={closeStudentModal}>&times;</button>
+				<h3>Select Subject - {selectedSection?.SectionName || ''}</h3>
+				<button class="close-btn" on:click={closeSubjectSelectionModal}>&times;</button>
+			</div>
+			
+			<div class="modal-body">
+				<div class="subjects-list">
+					{#if sectionSubjects.length === 0}
+						<div class="empty-state">
+							<p>No subjects available in this section. Please add subjects first.</p>
+						</div>
+					{:else}
+						{#each sectionSubjects as subject (subject.SubjectID)}
+							<div 
+								class="subject-item"
+								on:click={() => selectSubjectForEnrollment(subject)}
+								on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSubjectForEnrollment(subject)}
+								role="button"
+								tabindex="0"
+							>
+								<div class="subject-info">
+									<div class="subject-name">{subject.SubjectName}</div>
+									<div class="subject-code">{subject.SubjectCode}</div>
+									{#if subject.TeacherName}
+										<div class="subject-teacher">👨‍🏫 {subject.TeacherName}</div>
+									{/if}
+								</div>
+								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="9 18 15 12 9 6"></polyline>
+								</svg>
+							</div>
+						{/each}
+					{/if}
+				</div>
 			</div>
 			
 			<div class="modal-actions">
-				<button type="button" class="btn btn-secondary" on:click={closeStudentModal}>
+				<button type="button" class="btn btn-secondary" on:click={closeSubjectSelectionModal}>
 					Cancel
 				</button>
-				<button type="button" class="btn btn-primary" disabled={enrolling}>
-					{#if enrolling}
-						Enrolling...
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Enroll Students Modal -->
+{#if showStudentModal}
+	<div 
+		class="modal-overlay" 
+		on:click={closeStudentModal}
+		on:keydown={(e) => e.key === 'Escape' && closeStudentModal()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content modal-extra-large" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
+			<div class="modal-header">
+				<div class="modal-header-content">
+					<div class="modal-title-section">
+						<h3>Manage Enrollments</h3>
+						<div class="modal-subtitle">
+							<span class="badge badge-blue">{selectedSection?.SectionName}</span>
+							<span class="separator">›</span>
+							<span class="badge badge-purple">{selectedSubject?.SubjectName}</span>
+						</div>
+					</div>
+					<div class="enrollment-stats">
+						<div class="stat-badge">
+							<span class="stat-value">{enrolledStudents.length}</span>
+							<span class="stat-label">Enrolled</span>
+						</div>
+						<div class="stat-badge">
+							<span class="stat-value">{availableStudents.length}</span>
+							<span class="stat-label">Available</span>
+						</div>
+					</div>
+				</div>
+				<button class="close-btn" on:click={closeStudentModal}>&times;</button>
+			</div>
+			
+			<div class="modal-body-split">
+				<!-- Search Bar -->
+				<div class="search-section">
+					<div class="search-wrapper">
+						<svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="11" cy="11" r="8"></circle>
+							<path d="m21 21-4.35-4.35"></path>
+						</svg>
+						<input
+							type="text"
+							bind:value={studentSearchTerm}
+							placeholder="Search students by name or ID..."
+							class="search-input-modern"
+						/>
+						{#if studentSearchTerm}
+							<button class="clear-search" on:click={() => studentSearchTerm = ''}>
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<line x1="18" y1="6" x2="6" y2="18"></line>
+									<line x1="6" y1="6" x2="18" y2="18"></line>
+								</svg>
+							</button>
+						{/if}
+					</div>
+				</div>
+
+				<!-- Split View Container -->
+				<div class="split-container">
+					<!-- Enrolled Students (Left) -->
+					<div class="panel panel-enrolled">
+						<div class="panel-header">
+							<div class="panel-title">
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+									<polyline points="22 4 12 14.01 9 11.01"></polyline>
+								</svg>
+								<span>Enrolled Students</span>
+							</div>
+							<span class="count-badge">{filteredEnrolledStudents.length}</span>
+						</div>
+						<div class="panel-body">
+							{#if enrolledStudents.length === 0}
+								<div class="empty-panel">
+									<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+										<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+										<circle cx="12" cy="7" r="4"></circle>
+									</svg>
+									<p>No students enrolled yet</p>
+								</div>
+							{:else if filteredEnrolledStudents.length === 0}
+								<div class="empty-panel">
+									<p>No results found</p>
+								</div>
+							{:else}
+								<div class="students-grid">
+									{#each filteredEnrolledStudents as student (student.StudentID)}
+										<div class="student-card enrolled">
+											<div class="student-avatar">
+												<span>{student.FirstName.charAt(0)}{student.LastName.charAt(0)}</span>
+											</div>
+											<div class="student-details">
+												<div class="student-name">{student.FirstName} {student.LastName}</div>
+												<div class="student-meta">
+													<span class="student-id">#{student.StudentID}</span>
+													{#if student.YearLevel}
+														<span class="separator-dot">•</span>
+														<span class="year-level">Year {student.YearLevel}</span>
+													{/if}
+												</div>
+											</div>
+											<button 
+												type="button"
+												class="action-btn btn-remove"
+												on:click={() => handleUnenrollStudent(student.StudentID)}
+												title="Unenroll student"
+											>
+												<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<line x1="18" y1="6" x2="6" y2="18"></line>
+													<line x1="6" y1="6" x2="18" y2="18"></line>
+												</svg>
+											</button>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+
+					<!-- Available Students (Right) -->
+					<div class="panel panel-available">
+						<div class="panel-header">
+							<div class="panel-title">
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+									<circle cx="12" cy="7" r="4"></circle>
+								</svg>
+								<span>Available Students</span>
+							</div>
+							<span class="count-badge">{availableStudents.length}</span>
+						</div>
+						<div class="panel-body">
+							{#if students.length === 0}
+								<div class="empty-panel">
+									<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+										<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+										<circle cx="12" cy="7" r="4"></circle>
+									</svg>
+									<p>No students available</p>
+								</div>
+							{:else if availableStudents.length === 0}
+								<div class="empty-panel">
+									<p>All students enrolled or no results</p>
+								</div>
+							{:else}
+								<div class="students-grid">
+									{#each availableStudents as student (student.StudentID)}
+										<div 
+											class="student-card available"
+											class:selected={selectedStudents.has(student.StudentID)}
+											on:click={() => toggleStudent(student.StudentID)}
+											on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleStudent(student.StudentID)}
+											role="button"
+											tabindex="0"
+										>
+											<div class="student-checkbox-modern">
+												<input 
+													type="checkbox" 
+													checked={selectedStudents.has(student.StudentID)}
+													on:click|stopPropagation
+													on:change={() => toggleStudent(student.StudentID)}
+												/>
+												<span class="checkmark"></span>
+											</div>
+											<div class="student-avatar">
+												<span>{student.FirstName.charAt(0)}{student.LastName.charAt(0)}</span>
+											</div>
+											<div class="student-details">
+												<div class="student-name">{student.FirstName} {student.LastName}</div>
+												<div class="student-meta">
+													<span class="student-id">#{student.StudentID}</span>
+													{#if student.YearLevel}
+														<span class="separator-dot">•</span>
+														<span class="year-level">Year {student.YearLevel}</span>
+													{/if}
+												</div>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+			</div>
+			
+			<div class="modal-footer">
+				<div class="footer-info">
+					{#if selectedCount > 0}
+						<span class="selection-info">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="20 6 9 17 4 12"></polyline>
+							</svg>
+							{selectedCount} student{selectedCount !== 1 ? 's' : ''} selected
+						</span>
 					{:else}
-						Enroll Selected ({selectedCount})
+						<span class="hint-text">Select students from the right panel to enroll</span>
 					{/if}
-				</button>
+				</div>
+				<div class="footer-actions">
+					<button type="button" class="btn btn-secondary" on:click={closeStudentModal}>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<line x1="18" y1="6" x2="6" y2="18"></line>
+							<line x1="6" y1="6" x2="18" y2="18"></line>
+						</svg>
+						Close
+					</button>
+					<button 
+						type="button" 
+						class="btn btn-primary btn-large" 
+						disabled={enrolling || selectedCount === 0}
+						on:click={handleEnrollStudents}
+					>
+						{#if enrolling}
+							<span class="spinner"></span>
+							Enrolling...
+						{:else}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+								<circle cx="8.5" cy="7" r="4"></circle>
+								<line x1="20" y1="8" x2="20" y2="14"></line>
+								<line x1="23" y1="11" x2="17" y2="11"></line>
+							</svg>
+							Enroll {selectedCount} Student{selectedCount !== 1 ? 's' : ''}
+						{/if}
+					</button>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -1139,6 +1563,7 @@
 		background: radial-gradient(circle at center, rgba(59, 130, 246, 0.1), transparent);
 		opacity: 0;
 		transition: opacity 0.3s ease-out;
+		pointer-events: none;
 	}
 
 	.section-card-item:hover .card-glow {
@@ -1205,6 +1630,8 @@
 	.card-actions {
 		display: flex;
 		gap: 8px;
+		position: relative;
+		z-index: 10;
 	}
 
 	/* ===== BUTTONS ===== */
@@ -1223,6 +1650,9 @@
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		font-family: inherit;
+		position: relative;
+		z-index: 10;
+		pointer-events: auto;
 	}
 
 	.btn-primary {
@@ -1299,6 +1729,17 @@
 		max-width: 500px;
 		width: 90%;
 		animation: slideUp 0.3s ease-out;
+		max-height: 90vh;
+		overflow-y: auto;
+	}
+
+	.modal-large {
+		max-width: 700px;
+	}
+
+	.modal-extra-large {
+		max-width: 1200px;
+		max-height: 90vh;
 	}
 
 	@keyframes slideUp {
@@ -1317,6 +1758,82 @@
 		align-items: center;
 		justify-content: space-between;
 		margin-bottom: 24px;
+		padding-bottom: 20px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+	}
+
+	.modal-header-content {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+	}
+
+	.modal-title-section {
+		flex: 1;
+	}
+
+	.modal-subtitle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 8px;
+	}
+
+	.badge {
+		display: inline-block;
+		padding: 4px 12px;
+		border-radius: 20px;
+		font-size: 11px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.badge-blue {
+		background: rgba(59, 130, 246, 0.2);
+		color: #2563eb;
+	}
+
+	.badge-purple {
+		background: rgba(168, 85, 247, 0.2);
+		color: #9333ea;
+	}
+
+	.separator {
+		color: #94a3b8;
+		font-size: 18px;
+	}
+
+	.enrollment-stats {
+		display: flex;
+		gap: 12px;
+	}
+
+	.stat-badge {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 8px 16px;
+		background: rgba(255, 255, 255, 0.3);
+		border-radius: 8px;
+		min-width: 80px;
+	}
+
+	.stat-value {
+		font-size: 24px;
+		font-weight: 700;
+		color: #1e293b;
+		line-height: 1;
+	}
+
+	.stat-label {
+		font-size: 11px;
+		color: #64748b;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		margin-top: 4px;
 	}
 
 	.modal-header h3 {
@@ -1389,6 +1906,485 @@
 		margin-top: 28px;
 		padding-top: 20px;
 		border-top: 1px solid rgba(255, 255, 255, 0.2);
+	}
+
+	.modal-body {
+		margin-bottom: 20px;
+	}
+
+	/* ===== SPLIT VIEW MODAL ===== */
+	.modal-body-split {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.search-section {
+		padding: 0;
+	}
+
+	.search-wrapper {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+
+	.search-icon {
+		position: absolute;
+		left: 16px;
+		color: #64748b;
+		pointer-events: none;
+	}
+
+	.search-input-modern {
+		width: 100%;
+		padding: 14px 48px 14px 48px;
+		background: rgba(255, 255, 255, 0.5);
+		border: 2px solid rgba(255, 255, 255, 0.5);
+		border-radius: 12px;
+		font-size: 14px;
+		color: #1e293b;
+		transition: all 0.3s ease-out;
+		font-family: inherit;
+		box-sizing: border-box;
+	}
+
+	.search-input-modern::placeholder {
+		color: #94a3b8;
+	}
+
+	.search-input-modern:focus {
+		outline: none;
+		background: rgba(255, 255, 255, 0.8);
+		border-color: rgba(59, 130, 246, 0.5);
+		box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+	}
+
+	.clear-search {
+		position: absolute;
+		right: 12px;
+		background: rgba(100, 116, 139, 0.1);
+		border: none;
+		border-radius: 6px;
+		padding: 6px;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.2s ease-out;
+	}
+
+	.clear-search:hover {
+		background: rgba(100, 116, 139, 0.2);
+	}
+
+	.split-container {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 16px;
+		min-height: 500px;
+	}
+
+	.panel {
+		display: flex;
+		flex-direction: column;
+		background: rgba(255, 255, 255, 0.3);
+		border: 1px solid rgba(255, 255, 255, 0.4);
+		border-radius: 12px;
+		overflow: hidden;
+	}
+
+	.panel-enrolled {
+		border-left: 3px solid #22C55E;
+	}
+
+	.panel-available {
+		border-left: 3px solid #3B82F6;
+	}
+
+	.panel-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16px 20px;
+		background: rgba(255, 255, 255, 0.3);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+	}
+
+	.panel-title {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 14px;
+		font-weight: 600;
+		color: #1e293b;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.count-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 28px;
+		height: 28px;
+		padding: 0 8px;
+		background: rgba(59, 130, 246, 0.2);
+		color: #2563eb;
+		border-radius: 14px;
+		font-size: 12px;
+		font-weight: 700;
+	}
+
+	.panel-body {
+		flex: 1;
+		overflow-y: auto;
+		padding: 16px;
+	}
+
+	.empty-panel {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		min-height: 300px;
+		color: #94a3b8;
+		text-align: center;
+	}
+
+	.empty-panel svg {
+		margin-bottom: 16px;
+		opacity: 0.3;
+	}
+
+	.empty-panel p {
+		margin: 0;
+		font-size: 14px;
+	}
+
+	.students-grid {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.student-card {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 12px;
+		background: rgba(255, 255, 255, 0.4);
+		border: 2px solid rgba(255, 255, 255, 0.4);
+		border-radius: 10px;
+		transition: all 0.3s ease-out;
+	}
+
+	.student-card.available {
+		cursor: pointer;
+	}
+
+	.student-card.available:hover {
+		background: rgba(255, 255, 255, 0.6);
+		border-color: rgba(59, 130, 246, 0.3);
+		transform: translateX(4px);
+	}
+
+	.student-card.selected {
+		background: rgba(59, 130, 246, 0.15);
+		border-color: rgba(59, 130, 246, 0.5);
+	}
+
+	.student-card.enrolled {
+		background: rgba(34, 197, 94, 0.1);
+		border-color: rgba(34, 197, 94, 0.2);
+	}
+
+	.student-avatar {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+		border-radius: 50%;
+		color: white;
+		font-size: 14px;
+		font-weight: 600;
+		flex-shrink: 0;
+	}
+
+	.student-card.enrolled .student-avatar {
+		background: linear-gradient(135deg, #22C55E, #10B981);
+	}
+
+	.student-details {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.student-name {
+		font-size: 14px;
+		font-weight: 600;
+		color: #1e293b;
+		margin-bottom: 4px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.student-meta {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		color: #64748b;
+	}
+
+	.separator-dot {
+		color: #cbd5e1;
+	}
+
+	.student-checkbox-modern {
+		position: relative;
+		width: 20px;
+		height: 20px;
+		flex-shrink: 0;
+	}
+
+	.student-checkbox-modern input[type="checkbox"] {
+		position: absolute;
+		opacity: 0;
+		cursor: pointer;
+		width: 100%;
+		height: 100%;
+		z-index: 2;
+	}
+
+	.student-checkbox-modern .checkmark {
+		position: absolute;
+		top: 0;
+		left: 0;
+		height: 20px;
+		width: 20px;
+		background: rgba(255, 255, 255, 0.5);
+		border: 2px solid rgba(100, 116, 139, 0.3);
+		border-radius: 6px;
+		transition: all 0.3s ease-out;
+	}
+
+	.student-checkbox-modern input:checked ~ .checkmark {
+		background: linear-gradient(135deg, #3B82F6, #2563eb);
+		border-color: #3B82F6;
+	}
+
+	.student-checkbox-modern .checkmark:after {
+		content: "";
+		position: absolute;
+		display: none;
+		left: 6px;
+		top: 2px;
+		width: 5px;
+		height: 10px;
+		border: solid white;
+		border-width: 0 2px 2px 0;
+		transform: rotate(45deg);
+	}
+
+	.student-checkbox-modern input:checked ~ .checkmark:after {
+		display: block;
+	}
+
+	.action-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border: none;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: all 0.3s ease-out;
+		flex-shrink: 0;
+	}
+
+	.btn-remove {
+		background: rgba(239, 68, 68, 0.1);
+		color: #dc2626;
+	}
+
+	.btn-remove:hover {
+		background: rgba(239, 68, 68, 0.2);
+		transform: scale(1.1);
+	}
+
+	/* ===== MODAL FOOTER ===== */
+	.modal-footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-top: 20px;
+		border-top: 1px solid rgba(255, 255, 255, 0.2);
+		margin-top: 16px;
+	}
+
+	.footer-info {
+		flex: 1;
+	}
+
+	.selection-info {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 16px;
+		background: rgba(59, 130, 246, 0.1);
+		color: #2563eb;
+		border-radius: 8px;
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.hint-text {
+		color: #94a3b8;
+		font-size: 13px;
+	}
+
+	.footer-actions {
+		display: flex;
+		gap: 12px;
+	}
+
+	.btn-large {
+		padding: 12px 24px;
+		font-size: 14px;
+	}
+
+	/* ===== STUDENTS LIST ===== */
+	.students-list {
+		max-height: 400px;
+		overflow-y: auto;
+		margin-top: 16px;
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.2);
+		padding: 8px;
+	}
+
+	.student-item {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 12px 16px;
+		background: rgba(255, 255, 255, 0.3);
+		border: 1px solid rgba(255, 255, 255, 0.4);
+		border-radius: 8px;
+		margin-bottom: 8px;
+		cursor: pointer;
+		transition: all 0.3s ease-out;
+	}
+
+	.student-item:hover {
+		background: rgba(255, 255, 255, 0.5);
+		border-color: rgba(59, 130, 246, 0.3);
+		transform: translateX(4px);
+	}
+
+	.student-item.selected {
+		background: rgba(59, 130, 246, 0.2);
+		border-color: rgba(59, 130, 246, 0.5);
+	}
+
+	.student-checkbox {
+		flex-shrink: 0;
+	}
+
+	.student-checkbox input[type="checkbox"] {
+		width: 18px;
+		height: 18px;
+		cursor: pointer;
+	}
+
+	.student-info {
+		flex: 1;
+	}
+
+	.student-name {
+		font-size: 14px;
+		font-weight: 600;
+		color: #1e293b;
+		margin-bottom: 2px;
+	}
+
+	.student-id {
+		font-size: 12px;
+		color: #64748b;
+	}
+
+	.students-list::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.students-list::-webkit-scrollbar-track {
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 4px;
+	}
+
+	.students-list::-webkit-scrollbar-thumb {
+		background: rgba(59, 130, 246, 0.3);
+		border-radius: 4px;
+	}
+
+	.students-list::-webkit-scrollbar-thumb:hover {
+		background: rgba(59, 130, 246, 0.5);
+	}
+
+	/* ===== SUBJECTS LIST ===== */
+	.subjects-list {
+		max-height: 400px;
+		overflow-y: auto;
+		margin-top: 16px;
+	}
+
+	.subject-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 16px;
+		background: rgba(255, 255, 255, 0.3);
+		border: 1px solid rgba(255, 255, 255, 0.4);
+		border-radius: 8px;
+		margin-bottom: 12px;
+		cursor: pointer;
+		transition: all 0.3s ease-out;
+	}
+
+	.subject-item:hover {
+		background: rgba(255, 255, 255, 0.5);
+		border-color: rgba(59, 130, 246, 0.3);
+		transform: translateX(4px);
+	}
+
+	.subject-info {
+		flex: 1;
+	}
+
+	.subject-name {
+		font-size: 16px;
+		font-weight: 600;
+		color: #1e293b;
+		margin-bottom: 4px;
+	}
+
+	.subject-code {
+		font-size: 12px;
+		color: #64748b;
+		margin-bottom: 4px;
+	}
+
+	.subject-teacher {
+		font-size: 13px;
+		color: #3B82F6;
+		margin-top: 4px;
 	}
 
 	/* ===== EMPTY STATE ===== */
@@ -1468,6 +2464,49 @@
 
 		.modal-content {
 			padding: 20px;
+		}
+
+		.split-container {
+			grid-template-columns: 1fr;
+			min-height: 400px;
+		}
+
+		.modal-extra-large {
+			max-width: 95%;
+		}
+
+		.modal-header-content {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 12px;
+		}
+
+		.enrollment-stats {
+			width: 100%;
+			justify-content: space-around;
+		}
+
+		.panel-body {
+			padding: 12px;
+		}
+
+		.student-card {
+			padding: 10px;
+		}
+
+		.student-avatar {
+			width: 36px;
+			height: 36px;
+			font-size: 12px;
+		}
+
+		.footer-actions {
+			flex-direction: column;
+			width: 100%;
+		}
+
+		.footer-actions .btn {
+			width: 100%;
 		}
 	}
 
