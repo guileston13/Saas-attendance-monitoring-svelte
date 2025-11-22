@@ -1,6 +1,7 @@
 <script>
 // Subjects management page
 import { browser } from '$app/environment';
+import { onMount } from 'svelte';
 
 /** @type {import('./$types').PageData} */
 export let data;
@@ -8,6 +9,7 @@ export let data;
 $: session = data.session;
 $: subjects = data.subjects || [];
 $: statusList = data.statusList || [];
+$: rooms = data.rooms || [];
 
 let showModal = false;
 let editingSubject = null;
@@ -21,8 +23,6 @@ let pageVisible = false;
 let statsVisible = false;
 let cardsVisible = false;
 let scrollY = 0;
-
-import { onMount } from 'svelte';
 
 onMount(() => {
 	const loadingSteps = [
@@ -432,8 +432,21 @@ async function handleDelete(subjectId) {
 
 <!-- Modal for add/edit subject -->
 {#if showModal}
-	<div class="modal-overlay" on:click={closeModal} on:keydown={handleKeydown} role="dialog" aria-modal="true" tabindex="-1">
-		<div class="modal-content" on:click|stopPropagation role="document">
+	<div 
+		class="modal-overlay" 
+		on:click={closeModal} 
+		on:keydown={handleKeydown} 
+		role="button" 
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content" 
+			on:click|stopPropagation 
+			role="dialog" 
+			aria-modal="true"
+			tabindex="-1"
+		>
 			<div class="modal-header">
 				<div class="modal-title-wrapper">
 					<div class="modal-icon">
@@ -491,14 +504,17 @@ async function handleDelete(subjectId) {
 				
 				<div class="form-group">
 					<label for="room" class="form-label">Room:</label>
-					<input
-						type="text"
+					<select
 						id="room"
 						bind:value={formData.room}
 						disabled={loading}
-						placeholder="e.g., Room 101, Lab 1, Gym"
 						class="form-input"
-					/>
+					>
+						<option value="">Select a room</option>
+						{#each rooms as room}
+							<option value={room.RoomID}>{room.RoomName}</option>
+						{/each}
+					</select>
 				</div>
 				
 				<div class="form-row">

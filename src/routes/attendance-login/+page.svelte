@@ -80,7 +80,7 @@
     deviceName = localStorage.getItem("deviceName") || "";
     selectedSubject = localStorage.getItem("selectedSubject") || "";
     SERVER_URL = localStorage.getItem("SERVER_URL") || "/attendance-login/api";
-  }
+  });
 
   $: if (typeof window !== "undefined") {
     localStorage.setItem("deviceName", deviceName);
@@ -88,7 +88,6 @@
     localStorage.setItem("SERVER_URL", SERVER_URL);
   }
 
-  let eventSource;
   // On mount: auto-select EMEET USB webcam
   onMount(async () => {
     // Check if mediaDevices is available
@@ -2427,12 +2426,6 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-  }
-
-  .result-icon svg {
-    width: 18px;
-    height: 18px;
-    color: white;
   }
 
   .result-text {

@@ -385,7 +385,13 @@
 			
 			<div class="selection-grid">
 				{#each availableSections as section}
-					<div class="selection-card" on:click={() => selectSection(section.SectionID.toString())}>
+					<div 
+						class="selection-card" 
+						on:click={() => selectSection(section.SectionID.toString())}
+						on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSection(section.SectionID.toString())}
+						role="button"
+						tabindex="0"
+					>
 						<div class="card-icon">🏫</div>
 						<h3>{section.SectionName}</h3>
 						<!-- <p class="card-subtitle">{section.YearLevel}</p> -->
@@ -413,7 +419,13 @@
 			
 			<div class="selection-grid">
 				{#each availableSubjects as subject}
-					<div class="selection-card" on:click={() => selectSubject(subject.SubjectID.toString())}>
+					<div 
+						class="selection-card" 
+						on:click={() => selectSubject(subject.SubjectID.toString())}
+						on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSubject(subject.SubjectID.toString())}
+						role="button"
+						tabindex="0"
+					>
 						<div class="card-icon">📖</div>
 						<h3>{subject.SubjectName}</h3>
 						<p class="card-subtitle">{subject.SubjectCode}</p>
@@ -451,7 +463,13 @@
 			<!-- Month Grid -->
 			<div class="month-grid">
 				{#each months as month}
-					<div class="month-card" on:click={() => selectMonth(month.value)}>
+					<div 
+						class="month-card" 
+						on:click={() => selectMonth(month.value)}
+						on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectMonth(month.value)}
+						role="button"
+						tabindex="0"
+					>
 						<h3>{month.label}</h3>
 						<p>{selectedYear}</p>
 					</div>

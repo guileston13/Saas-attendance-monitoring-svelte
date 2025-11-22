@@ -17,15 +17,17 @@ export async function load({ request }) {
     }
     
     try {
-        const [subjects, statusList] = await Promise.all([
+        const [subjects, statusList, rooms] = await Promise.all([
             getAllSubjects(),
-            executeQuery('SELECT * FROM status ORDER BY StatusName')
+            executeQuery('SELECT * FROM status ORDER BY StatusName'),
+            executeQuery('SELECT RoomID, RoomName FROM room ORDER BY RoomName')
         ]);
         
         return {
             session,
             subjects,
-            statusList
+            statusList,
+            rooms
         };
     } catch (error) {
         console.error('Load subjects error:', error);
@@ -33,6 +35,7 @@ export async function load({ request }) {
             session,
             subjects: [],
             statusList: [],
+            rooms: [],
             error: 'Failed to load subjects data'
         };
     }

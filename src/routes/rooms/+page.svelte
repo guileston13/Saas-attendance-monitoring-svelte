@@ -384,8 +384,20 @@ async function handleDelete(roomId) {
 </div>
 
 {#if showModal}
-	<div class="modal-overlay" on:click={closeModal}>
-		<div class="modal-content" on:click|stopPropagation>
+	<div 
+		class="modal-overlay" 
+		on:click={closeModal}
+		on:keydown={(e) => e.key === 'Escape' && closeModal()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
 			<div class="modal-header">
 				<h3>{editingRoom ? 'Edit Room' : 'Create New Room'}</h3>
 				<button class="close-btn" on:click={closeModal}>&times;</button>
@@ -1253,8 +1265,7 @@ async function handleDelete(roomId) {
 		letter-spacing: 0.5px;
 	}
 
-	.form-group input,
-	.form-group select {
+	.form-group input {
 		width: 100%;
 		padding: 12px 16px;
 		background: rgba(255, 255, 255, 0.5);
@@ -1271,8 +1282,7 @@ async function handleDelete(roomId) {
 		color: #94a3b8;
 	}
 
-	.form-group input:focus,
-	.form-group select:focus {
+	.form-group input:focus {
 		outline: none;
 		background: rgba(255, 255, 255, 0.7);
 		border-color: rgba(59, 130, 246, 0.5);

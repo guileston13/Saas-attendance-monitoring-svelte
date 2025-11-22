@@ -175,7 +175,13 @@
 		
 		<div class="sections-grid">
 			{#each sections as section}
-				<div class="section-card" on:click={() => viewSectionReport(section)}>
+				<div 
+					class="section-card" 
+					on:click={() => viewSectionReport(section)}
+					on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && viewSectionReport(section)}
+					role="button"
+					tabindex="0"
+				>
 					<h4>{section.SectionName}</h4>
 					<p class="student-count">{section.StudentCount || 0} students enrolled</p>
 					<div class="card-actions">
@@ -193,8 +199,20 @@
 
 <!-- Report Modal -->
 {#if showModal}
-	<div class="modal-overlay" on:click={closeModal}>
-		<div class="modal-content large-modal" on:click|stopPropagation>
+	<div 
+		class="modal-overlay" 
+		on:click={closeModal}
+		on:keydown={(e) => e.key === 'Escape' && closeModal()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content large-modal" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
 			<div class="modal-header">
 				<h3 class="modal-title">
 					{selectedSection?.SectionName} - Student Report

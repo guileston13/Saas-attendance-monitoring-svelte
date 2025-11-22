@@ -1,6 +1,7 @@
 <script>
 	import { browser } from '$app/environment';
-	import { onMount, invalidateAll } from 'svelte';
+	import { onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
 
 	export let data;
@@ -293,7 +294,13 @@
 				<!-- Sections Grid -->
 				<div class="sections-grid">
 					{#each filteredSections as section (section.SectionID)}
-						<div class="section-card-item" on:click={() => selectSectionItem(section.SectionID)}>
+						<div 
+							class="section-card-item" 
+							on:click={() => selectSectionItem(section.SectionID)}
+							on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSectionItem(section.SectionID)}
+							role="button"
+							tabindex="0"
+						>
 							<div class="card-glow"></div>
 							<div class="card-header-mini">
 								<div class="card-title-section">
@@ -350,8 +357,20 @@
 
 <!-- Create/Edit Section Modal -->
 {#if showCreateModal}
-	<div class="modal-overlay" on:click={closeCreateModal}>
-		<div class="modal-content" on:click|stopPropagation>
+	<div 
+		class="modal-overlay" 
+		on:click={closeCreateModal}
+		on:keydown={(e) => e.key === 'Escape' && closeCreateModal()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
 			<div class="modal-header">
 				<h3>{editingSection ? 'Edit Section' : 'Create New Section'}</h3>
 				<button class="close-btn" on:click={closeCreateModal}>&times;</button>
@@ -418,8 +437,20 @@
 
 <!-- Add Subject Modal -->
 {#if showSubjectModal}
-	<div class="modal-overlay" on:click={closeSubjectModal}>
-		<div class="modal-content" on:click|stopPropagation>
+	<div 
+		class="modal-overlay" 
+		on:click={closeSubjectModal}
+		on:keydown={(e) => e.key === 'Escape' && closeSubjectModal()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
 			<div class="modal-header">
 				<h3>Add Subject to {selectedSection?.SectionName}</h3>
 				<button class="close-btn" on:click={closeSubjectModal}>&times;</button>
@@ -467,8 +498,20 @@
 
 <!-- Enroll Students Modal -->
 {#if showStudentModal}
-	<div class="modal-overlay" on:click={closeStudentModal}>
-		<div class="modal-content" on:click|stopPropagation>
+	<div 
+		class="modal-overlay" 
+		on:click={closeStudentModal}
+		on:keydown={(e) => e.key === 'Escape' && closeStudentModal()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
 			<div class="modal-header">
 				<h3>Enroll Students - {selectedSection?.SectionName || ''}</h3>
 				<button class="close-btn" on:click={closeStudentModal}>&times;</button>

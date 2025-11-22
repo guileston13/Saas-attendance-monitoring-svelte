@@ -35,5 +35,25 @@ export async function handle({ event, resolve }) {
     throw error(403, 'Access denied. This attendance system is restricted to authorized devices/locations only.');
   }
 
-  return resolve(event);
+  // Handle CORS
+  if (event.request.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+        'Access-Control-Allow-Origin': event.request.headers.get('origin') || '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+        'Access-Control-Allow-Credentials': 'true'
+      }
+    });
+  }
+
+  const response = await resolve(event);
+  
+  const origin = event.request.headers.get('origin');
+  if (origin) {
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  return response;
 }

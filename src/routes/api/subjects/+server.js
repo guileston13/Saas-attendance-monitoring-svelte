@@ -67,18 +67,25 @@ export async function POST({ request }) {
 export async function PUT({ request }) {
     const session = getSessionFromCookies(request.headers.get('cookie'));
     
+    console.log('PUT /api/subjects - Session:', session);
+    
     if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
+        console.log('PUT /api/subjects - Unauthorized');
         return json({ error: 'Unauthorized' }, { status: 401 });
     }
     
     try {
         const data = await request.json();
+        console.log('PUT /api/subjects - Request data:', data);
+        
         const { subjectId, subjectName, subjectCode, room, startTime, endTime, statusId } = data;
         
         if (!subjectId || !subjectName || !subjectCode || !statusId) {
+            console.log('PUT /api/subjects - Missing required fields');
             return json({ error: 'Missing required fields' }, { status: 400 });
         }
         
+        console.log('PUT /api/subjects - Updating subject:', subjectId);
         await updateSubject(subjectId, {
             subjectName,
             subjectCode,
@@ -88,15 +95,21 @@ export async function PUT({ request }) {
             statusId
         });
         
+        console.log('PUT /api/subjects - Update successful');
         return json({ success: true });
     } catch (error) {
         console.error('Update subject error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+        });
         
         if (error.code === 'ER_DUP_ENTRY') {
             return json({ error: 'Subject code already exists' }, { status: 400 });
         }
         
-        return json({ error: 'Failed to update subject' }, { status: 500 });
+        return json({ error: 'Failed to update subject', details: error.message }, { status: 500 });
     }
 }
 

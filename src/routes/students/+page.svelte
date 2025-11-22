@@ -429,8 +429,20 @@
 
 <!-- Modal for add/edit student -->
 {#if showModal}
-	<div class="modal-overlay" on:click={closeModal}>
-		<div class="modal-content" on:click|stopPropagation>
+	<div 
+		class="modal-overlay" 
+		on:click={closeModal}
+		on:keydown={(e) => e.key === 'Escape' && closeModal()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
 			<div class="modal-header">
 				<div class="modal-title-wrapper">
 					<div class="modal-icon">
