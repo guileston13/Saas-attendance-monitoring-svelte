@@ -36,7 +36,6 @@
   let loginCanvas;
   let loginCtx;
   let loginStream;
-  let loginCamera = null;
   let loginMessage = "";
   let loginMessageColor = "black"; 
   let detectionInterval;
@@ -48,7 +47,6 @@
   let lastDetectionTime = 0;                // Throttle frames
   let lastSuccessTime = 0;                  // Track idle state
   let currentDetectionInterval = 2000;      // Start at 2 seconds (2x better than 500ms)
-  let manualScanMode = false;               // Toggle between auto/manual
 
   // Settings 🔧
   // for authentication
@@ -76,6 +74,13 @@
   let eventSource;
   // On mount: auto-select EMEET USB webcam
   onMount(async () => {
+    // Check if mediaDevices is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      console.error("❌ navigator.mediaDevices not available. Make sure you're using HTTPS or localhost.");
+      alert("Camera access requires HTTPS or localhost. Please check your connection.");
+      return;
+    }
+
     const devices = await navigator.mediaDevices.enumerateDevices();
     cameras = devices.filter(d => d.kind === "videoinput");
 
@@ -158,39 +163,50 @@
     scannerActive = true;
 
     try {
-      const { Html5Qrcode } = await import("html5-qrcode"); // dynamic import
+      const { Html5Qrcode } = await import("html5-qrcode");
       html5QrCode = new Html5Qrcode("qr-reader");
 
-      // Always use the EMEET camera (already set in onMount)
-      const cameraConfig = { deviceId: { exact: selectedCamera } };
+      let cameraConfig;
+
+      // FIX: If selectedCamera is undefined → fallback to automatic back camera
+      if (selectedCamera) {
+        cameraConfig = { deviceId: { exact: selectedCamera } };
+      } else {
+        cameraConfig = { facingMode: "environment" };
+      }
 
       await html5QrCode.start(
         cameraConfig,
-        { fps: 10, qrbox: 250 },
-        (decodedText, decodedResult) => {
+        {
+          fps: 10,
+          qrbox: 250,
+          aspectRatio: 1.3333
+        },
+        (decodedText) => {
           console.log("QR scanned:", decodedText);
+
           try {
             fillFormFromQR(decodedText);
           } catch (err) {
             console.warn("QR parse problem:", err);
             alert("Scanned: " + decodedText);
           }
+
           stopScanner();
         },
         (errorMessage) => {
-          // scan errors (you can keep this quiet or log)
+          console.warn("QR scanning error:", errorMessage);
         }
       );
 
-
-      console.log("QR scanner started");
-      scannerActive = true;
     } catch (err) {
       console.error("Could not start QR scanner:", err);
       alert("Could not start QR scanner: " + (err.message || err));
       scannerActive = false;
     }
   }
+
+
 
   async function stopScanner() {
     if (html5QrCode) {
@@ -343,10 +359,13 @@
 
   async function startScan() {
     try {
+      // Check if mediaDevices is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera API not available. Please use HTTPS or localhost.");
+      }
+
       console.log("Starting camera with selectedCamera:", selectedCamera);
       
-      // 🎯 FIX: Progressive fallback strategy to avoid OverconstrainedError
-      let constraints;
       let retryCount = 0;
       let stream;
       
@@ -597,6 +616,11 @@
   
   async function startLoginCamera() {
     try {
+      // Check if mediaDevices is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera API not available. Please use HTTPS or localhost.");
+      }
+
       // Dynamically find EMEET camera id
       const devices = await navigator.mediaDevices.enumerateDevices();
       const emeetCam = devices.find(
@@ -606,17 +630,19 @@
       // 🎯 FIX: Progressive fallback strategy to avoid OverconstrainedError
       const attemptConfigurations = emeetCam
         ? [
-            // Try: Exact EMEET camera
+            // Try: Exact EMEET camera with high resolution
+            { video: { deviceId: { exact: emeetCam.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+            // Fallback: Exact EMEET camera, no resolution constraints
             { video: { deviceId: { exact: emeetCam.deviceId } } },
-            // Fallback: Prefer EMEET camera but not strict
-            { video: { deviceId: { ideal: emeetCam.deviceId } } },
-            // Fallback: Any camera with resolution
+            // Fallback: Prefer EMEET camera but not strict, high res
+            { video: { deviceId: { ideal: emeetCam.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+            // Fallback: Any camera with high resolution
             { video: { width: { ideal: 1280 }, height: { ideal: 720 } } },
             // Last resort: Any camera
             { video: true }
           ]
         : [
-            // No EMEET found, try any camera with resolution
+            // No EMEET found, try any camera with high resolution
             { video: { width: { ideal: 1280 }, height: { ideal: 720 } } },
             // Last resort: Any camera
             { video: true }
@@ -900,34 +926,23 @@
 
   {#if showLoginPage}
     <div class="login-page">
-      <h2>Login with Face Recognition</h2>
-      <!-- svelte-ignore a11y_media_has_caption -->
-      <video bind:this={loginVideo} autoplay playsinline muted class="border rounded w-96 h-72"></video>
+      <!-- Full-screen video background -->
+      <video bind:this={loginVideo} autoplay playsinline muted class="fullscreen-video"></video>
       <canvas bind:this={loginCanvas} style="display:none"></canvas>
 
-      <!-- 🎯 Manual scan button for user control -->
-      <div class="login-actions">
-        <button class="manual-scan-btn" on:click={sendFrameForDetection} title="Manual face scan trigger">
-          📸 Scan Now
-        </button>
+      <!-- Overlay UI -->
+      <div class="overlay-ui">
         
-        <button class="back-btn" on:click={() => { 
-          stopLoginCamera(); 
-          showLoginPage = false; 
-        }} title="Go back to main menu">
-          ← Back
-        </button>
+        <!-- 👇 Result message + thumbnail -->
+        {#if loginMessage}
+          <div class="message-container" style="--message-color: {loginMessageColor};">
+            {#if loginImageUrl}
+              <img src={loginImageUrl} alt="Recognized face" class="message-image" />
+            {/if}
+            <span>{loginMessage}</span>
+          </div>
+        {/if}
       </div>
-
-      <!-- 👇 Result message + thumbnail -->
-      {#if loginMessage}
-        <div style="margin-top: 1rem; font-weight: bold; color: {loginMessageColor}; display:flex; align-items:center; gap:10px; font-size: 1.5rem; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 10px; border: 2px solid {loginMessageColor};">
-          {#if loginImageUrl}
-            <img src={loginImageUrl} alt="Recognized face" style="width:80px; height:80px; border-radius:8px; object-fit:cover; border:3px solid {loginMessageColor};" />
-          {/if}
-          <span>{loginMessage}</span>
-        </div>
-      {/if}
     </div>
   {/if}
 
@@ -978,8 +993,8 @@
 
 <style>
   .screen {
-    width: 600px;
-    height: 1024px;
+    width: 740px;
+    height: 990px;
     display: flex;
     flex-direction: column; 
     align-items: center;
@@ -1082,47 +1097,6 @@
     cursor: pointer;
   }
 
-  .manual-scan-btn {
-    margin-top: 1.5rem;
-    background: #0077cc;
-    color: white;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 8px;
-    font-size: 1.1rem;
-    cursor: pointer;
-    font-weight: bold;
-    transition: background 0.2s;
-  }
-
-  .manual-scan-btn:hover {
-    background: #0055aa;
-  }
-
-  .login-actions {
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-    align-items: center;
-    margin-top: 1.5rem;
-  }
-
-  .back-btn {
-    background: #6c757d;
-    color: white;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 8px;
-    font-size: 1.1rem;
-    cursor: pointer;
-    font-weight: bold;
-    transition: background 0.2s;
-  }
-
-  .back-btn:hover {
-    background: #5a6268;
-  }
-
   .qr-reader {
     width: 100%;
     max-width: 400px;
@@ -1165,7 +1139,7 @@
   }
   video {
     width: 100%;
-    max-width: 480px;
+    max-width: 640px;
     border-radius: 8px;
   }
   .live-video {
@@ -1227,12 +1201,77 @@
     padding: 0; 
     touch-action: manipulation;
   }
-  .settings-btn:hover {
-    background-color: #222;
-    transform: rotate(30deg);
+  .login-page {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: #000; /* Black background for video */
   }
-  .gear {
-    display: inline-block;
-    transform: translate(1px, 0px);
+
+  .fullscreen-video {
+    /* occupy the entire viewport reliably */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0;
+    padding: 0;
+    /* mirror the video horizontally for a natural webcam feel */
+    transform: scaleX(-1) !important;
+    display: block;
+    object-fit: cover;
+    background-color: #000;
+    /* override other generic video rules */
+    border: none !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+    z-index: 1;
+  }
+
+  .overlay-ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    pointer-events: none; /* Allow interaction with video if needed */
+  }
+
+  .message-container {
+    margin-top: 1rem;
+    font-weight: bold;
+    color: var(--message-color);
+    display: flex;
+    flex-direction: row;  /* Thumbnail on left, text on right */
+    align-items: center;  /* Center vertically */
+    gap: 10px;
+    font-size: 1.5rem;
+    background: rgba(255,255,255,0.9);
+    padding: 10px;
+    border-radius: 10px;
+    border: 2px solid var(--message-color);
+    pointer-events: auto; /* Allow interaction with message */
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .message-image {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 3px solid var(--message-color);
   }
 </style>

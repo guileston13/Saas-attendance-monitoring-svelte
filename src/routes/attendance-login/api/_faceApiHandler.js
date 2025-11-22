@@ -197,29 +197,36 @@ export async function handleLoginRecognize(request) {
     const queryDescriptor = detection.descriptor;
     let bestMatch = null;
     let bestDistance = Infinity;
-    
-    // Check all registered students
+
+    // Check all registered students (compute per-student minimum distance)
     const descFiles = fs.readdirSync(DESC_DIR).filter(f => f.endsWith('.json'));
-    
+
     for (const descFile of descFiles) {
       const studentId = descFile.replace('.json', '');
       const data = JSON.parse(fs.readFileSync(path.join(DESC_DIR, descFile), 'utf8'));
       const descriptors = Array.isArray(data) ? data : data.descriptors;
-      
-      if (!Array.isArray(descriptors)) continue; // skip invalid files
-      
+      if (!Array.isArray(descriptors)) continue;
+
+      // compute the minimum distance for this student
+      let studentMin = Infinity;
       for (const desc of descriptors) {
-        // Ensure descriptor is an array (handle both old object format and new array format)
         const descriptorArray = Array.isArray(desc) ? desc : Object.values(desc);
         const distance = faceapi.euclideanDistance(queryDescriptor, descriptorArray);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestMatch = studentId;
-        }
+        if (distance < studentMin) studentMin = distance;
+      }
+
+      // debug: log per-student min distance (can be removed in production)
+      console.log(`🔎 student ${studentId} minDistance=${studentMin}`);
+
+      if (studentMin < bestDistance) {
+        bestDistance = studentMin;
+        bestMatch = studentId;
       }
     }
-    
-    if (bestMatch && bestDistance < 0.6) { // Threshold for match
+
+    console.log('✅ Recognition bestMatch:', bestMatch, 'bestDistance:', bestDistance);
+
+    if (bestMatch && bestDistance < 0.5) { // Threshold for match (tuned lower)
       // Get student name from database
       let studentName = bestMatch; // fallback to ID if name lookup fails
       try {

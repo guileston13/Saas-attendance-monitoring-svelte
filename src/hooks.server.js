@@ -17,6 +17,11 @@ export async function handle({ event, resolve }) {
     'DESKTOP-R98PM6A.local',
     'raspberrypi.local',
     'localhost',
+    '172.27.44.17',
+    '172.27.44.73',
+    '172.27.44.213',
+    '10.136.35.91'
+
   ];
 
   const isAllowed = allowedHosts.some((allowed) =>

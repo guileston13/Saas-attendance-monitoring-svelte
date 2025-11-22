@@ -1,6 +1,7 @@
 // vite.config.js
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import fs from 'fs';
 import path from 'path';
 
 export default defineConfig({
@@ -9,10 +10,15 @@ export default defineConfig({
   server: {
     host: true,  // listen on all interfaces
     port: 4173,
+    https: {},
     allowedHosts: [
       'localhost',
       'desktop-r98pm6a.local',
       'raspberrypi.local', // add your Pi here
+      '172.27.44.17',
+      '172.27.44.73',
+      '172.27.44.213',
+      '10.136.35.91'
     ],
     fs: {
       allow: [
@@ -26,10 +32,19 @@ export default defineConfig({
   preview: {
     host: true,
     port: 4173,
+    https: {
+      key: fs.readFileSync('./localhost+1-key.pem'),
+      cert: fs.readFileSync('./localhost+1.pem')
+    },
     allowedHosts: [
       'localhost',
       'desktop-r98pm6a.local',
       'raspberrypi.local', // add your Pi here
+      '172.27.44.17',
+      '172.27.44.73',
+      '172.27.44.213',
+      '10.136.35.91',
+      '192.168.56.1'
     ]
     // ✅ fs cannot go here
   }
