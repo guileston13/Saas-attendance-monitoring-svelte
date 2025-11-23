@@ -13,6 +13,7 @@
 	let editingUser = null;
 	let loading = false;
 	let searchTerm = '';
+	$: searchTermLower = (searchTerm || '').toLowerCase();
 	
 	// Premium loading and animation states
 	let isLoading = true;
@@ -25,12 +26,18 @@
 	let scrollY = 0;
 	
 	// Filter users based on search term
-	$: filteredUsers = users.filter(user => 
-		user.FullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-		user.Email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-		user.Role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-		user.StatusName.toLowerCase().includes(searchTerm.toLowerCase())
-	);
+	$: filteredUsers = users.filter(user => {
+		const fullName = (user.FullName || '').toLowerCase();
+		const email = (user.Email || '').toLowerCase();
+		const role = (user.Role || '').toLowerCase();
+		const status = (user.StatusName || '').toLowerCase();
+		return (
+			fullName.includes(searchTermLower) ||
+			email.includes(searchTermLower) ||
+			role.includes(searchTermLower) ||
+			status.includes(searchTermLower)
+		);
+	});
 	
 	// Premium loading animation sequence
 	onMount(() => {
@@ -106,7 +113,10 @@
 	}
 	
 	function formatDate(dateString) {
-		return new Date(dateString).toLocaleDateString();
+		if (!dateString) return '-';
+		const d = new Date(dateString);
+		if (isNaN(d.getTime())) return '-';
+		return d.toLocaleDateString();
 	}
 	
 	function getStatusColor(statusName) {
@@ -398,10 +408,10 @@
 										</div>
 									</td>
 									<td>
-										<span class="user-email">{user.Email}</span>
+										<span class="user-email">{user.Email || '—'}</span>
 									</td>
 									<td>
-										<span class="role-badge role-{user.Role.toLowerCase()}">{user.Role}</span>
+										<span class="role-badge role-{(user.Role || '').toLowerCase()}">{user.Role || '—'}</span>
 									</td>
 									<td>
 										<span 
@@ -425,7 +435,7 @@
 													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
 												</svg>
 											</button>
-											{#if user.UserID !== data.session.userId}
+											{#if user.UserID !== data.session?.userId}
 												<button 
 													class="btn btn-action btn-delete"
 													on:click={() => {

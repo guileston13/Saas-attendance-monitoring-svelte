@@ -172,10 +172,17 @@ export async function handleRegister(request) {
 export async function handleLoginRecognize(request) {
   await ensureModelsLoaded();
   try {
-    const { image, deviceName, selectedSubject } = await request.json();
+    const { image, roomId } = await request.json();
     
     if (!image) {
       return new Response(JSON.stringify({ message: '❌ No image provided' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    if (!roomId) {
+      return new Response(JSON.stringify({ message: '❌ Room not configured' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -240,31 +247,72 @@ export async function handleLoginRecognize(request) {
         // Continue with ID as fallback
       }
 
+      let subjectName = 'Unknown Subject'; // Default value
+      let attendanceRecorded = false;
+
       // Record attendance automatically when student is recognized
       try {
-        // Query for sectionID
-        const sectionQuery = await executeQuery('SELECT SectionID FROM section_subjects WHERE RoomID = ? AND SubjectID = ?', [deviceName, selectedSubject]);
-        let sectionId = 1; // default
-        if (sectionQuery.length > 0) {
-          sectionId = sectionQuery[0].SectionID;
-        } else {
-          console.warn('No section found for RoomID:', deviceName, 'SubjectID:', selectedSubject);
+        // 🎯 AUTO-DETECT SUBJECT: Query based on room + time + enrollment
+        const scheduleQuery = await executeQuery(`
+          SELECT ss.SubjectID, ss.SectionID, ss.TeacherID, s.SubjectName, ss.StartTime, ss.EndTime
+          FROM section_subjects ss
+          JOIN subject_enrollments se ON ss.SectionID = se.SectionID 
+                                        AND ss.SubjectID = se.SubjectID
+          JOIN subjects s ON ss.SubjectID = s.SubjectID
+          WHERE se.StudentID = ?
+            AND se.Status = 'Active'
+            AND ss.RoomID = ?
+            AND CURTIME() BETWEEN ss.StartTime AND ss.EndTime
+          LIMIT 1
+        `, [bestMatch, roomId]);
+        console.log("hello bestMatch: =>",bestMatch);
+        console.log("hello roomId: =>",roomId);
+        console.log('📅 Schedule query result:', scheduleQuery);
+        if (scheduleQuery.length === 0) {
+          return new Response(JSON.stringify({ 
+            message: `⚠️ No classed scheduled for ${studentName} in this room at current time`,
+            studentId: bestMatch
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
-
-        await recordAttendance(bestMatch, selectedSubject, sectionId);
+        
+        const { SubjectID, SectionID, TeacherID, SubjectName, StartTime } = scheduleQuery[0];
+        subjectName = SubjectName; // Update the variable
+        
+        console.log(`📚 Auto-detected: ${SubjectName} (Subject ID: ${SubjectID}, Section: ${SectionID})`);
+        
+        // Record attendance with the auto-detected subject and start time
+        await recordAttendance(bestMatch, SubjectID, SectionID, TeacherID, StartTime);
+        attendanceRecorded = true;
+        console.log(`✅ Attendance recorded successfully for ${studentName}`);
       } catch (attendanceError) {
         console.error('Attendance recording error:', attendanceError);
-        // Don't fail the recognition if attendance recording fails
+        // Continue with recognition but note that attendance wasn't recorded
+        return new Response(JSON.stringify({ 
+          message: `⚠️ ${studentName} recognized but attendance recording failed: ${attendanceError.message}`,
+          studentId: bestMatch,
+          subjectName: subjectName,
+          imageUrl: `/attendance-login/api/face/${bestMatch}_pic1.png`,
+          error: 'attendance_failed'
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
-      return new Response(JSON.stringify({ 
-        message: `✅ Welcome back, ${studentName}!`,
-        studentId: bestMatch,
-        imageUrl: `/attendance-login/api/face/${bestMatch}_pic1.png`
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+        
+        return new Response(JSON.stringify({ 
+          message: `✅ Welcome, ${studentName}! Marked present for ${subjectName}`,
+          studentId: bestMatch,
+          subjectName: subjectName,
+          imageUrl: `/attendance-login/api/face/${bestMatch}_pic1.png`,
+          attendanceRecorded: attendanceRecorded
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
     } else {
       return new Response(JSON.stringify({ message: '🚫 Stranger detected' }), {
         status: 200,
@@ -281,31 +329,71 @@ export async function handleLoginRecognize(request) {
 }
 
 /**
- * Record attendance for a recognized student
+ * Record attendance for a recognized student with login time
  * @param {string} studentId - The recognized student ID
  * @param {number|string} subjectId - The subject ID
  * @param {number|string} sectionId - The section ID
+ * @param {number|string} teacherId - The teacher ID (recorded_by)
+ * @param {string} startTime - Class start time (HH:MM:SS)
  */
-export async function recordAttendance(studentId, subjectId, sectionId) {
+export async function recordAttendance(studentId, subjectId, sectionId, teacherId, startTime) {
   try {
     // Ensure IDs are numbers
     const subId = Number(subjectId);
     const secId = Number(sectionId);
+    const teachId = Number(teacherId) || 1; // default to 1 if not provided
 
     if (isNaN(subId) || isNaN(secId)) {
       throw new Error(`Invalid numeric value for subjectId or sectionId: ${subjectId}, ${sectionId}`);
     }
 
-    // Get today's date in YYYY-MM-DD
-    const today = new Date().toISOString().split('T')[0];
+    // Get current time in HH:MM:SS format
+    const now = new Date();
+    
+    // Get today's date in YYYY-MM-DD format (Local time, not UTC)
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
+    
+    const loginTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
-    const recordedBy = 1; // default teacher/user ID
+    // Calculate if student is late (more than 15 minutes after start time)
+    let status = 'Present';
+    if (startTime) {
+      // Parse times
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [loginHour, loginMin] = loginTime.split(':').map(Number);
+      
+      // Convert to minutes since midnight
+      const startMinutes = startHour * 60 + startMin;
+      const loginMinutes = loginHour * 60 + loginMin;
+      
+      // Calculate difference in minutes
+      const minutesLate = loginMinutes - startMinutes;
+      
+      // If more than 15 minutes late, mark as Late (if supported) or Present with note
+      if (minutesLate > 15) {
+        status = 'Late'; // Note: Requires database migration to add 'Late' to ENUM
+        console.log(`⏰ Student is ${minutesLate} minutes late`);
+      }
+    }
 
-    // Call service to update attendance
-    const result = await updateAttendanceRecord(studentId, subId, secId, today, 'Present', recordedBy);
+    // Insert or update attendance record with login_time and status
+    const query = `
+      INSERT INTO attendance_records 
+      (student_id, subject_id, section_id, attendance_date, login_time, status, recorded_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        login_time = VALUES(login_time),
+        status = VALUES(status),
+        recorded_at = CURRENT_TIMESTAMP
+    `;
 
-    console.log(`✅ Attendance recorded for student ${studentId}, subjectId ${subId}, sectionId ${secId}`);
-    return result;
+    await executeQuery(query, [studentId, subId, secId, today, loginTime, status, teachId]);
+
+    console.log(`✅ Attendance recorded for student ${studentId} at ${loginTime} - Status: ${status}`);
+    return { success: true, loginTime, status };
   } catch (error) {
     console.error('⚠️ Failed to record attendance:', error.message);
     throw error;

@@ -25,10 +25,10 @@ export async function GET({ request, params }) {
 
         let subjects = [];
         
-        if (session.role === 'Admin') {
+        if (session?.role === 'Admin') {
             // Admin can see all subjects in the section
             subjects = await getSectionSubjects(sectionId);
-        } else if (session.role === 'Teacher') {
+        } else if (session?.role === 'Teacher') {
             // Teacher can only see subjects they are assigned to in this section
             subjects = await getTeacherSubjectsInSection(session.userId, sectionId);
         }
@@ -37,7 +37,7 @@ export async function GET({ request, params }) {
             success: true, 
             subjects: subjects,
             sectionId: sectionId,
-            userRole: session.role,
+            userRole: session?.role,
             totalSubjects: subjects.length
         }), {
             status: 200,

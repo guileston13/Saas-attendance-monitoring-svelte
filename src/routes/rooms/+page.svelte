@@ -13,6 +13,8 @@ let showModal = false;
 let editingRoom = null;
 let loading = false;
 let searchTerm = '';
+// use a derived lowercase search term to avoid repeated optional chaining
+$: searchTermLower = (searchTerm || '').toLowerCase();
 let isLoading = true;
 let loadingProgress = 0;
 let loadingText = 'Initializing...';
@@ -72,11 +74,11 @@ onMount(() => {
 
 // Filter rooms based on search term
 $: filteredRooms = rooms.filter(room => 
-	room.RoomName.toLowerCase().includes(searchTerm.toLowerCase())
+	(room.RoomName || '').toLowerCase().includes(searchTermLower)
 );
 
-$: availableRooms = filteredRooms.filter(room => room.StatusName === 'Available').length;
-$: occupiedRooms = filteredRooms.filter(room => room.StatusName === 'Occupied').length;
+$: availableRooms = filteredRooms.filter(room => (room.StatusName || '').toLowerCase() === 'available').length;
+$: occupiedRooms = filteredRooms.filter(room => (room.StatusName || '').toLowerCase() === 'occupied').length;
 
 function openModal(room = null) {
 	editingRoom = room;
@@ -330,9 +332,9 @@ async function handleDelete(roomId) {
 							<div class="card-glow"></div>
 							<div class="card-header-mini">
 								<div class="card-title-section">
-									<h3>{room.RoomName}</h3>
-									<span class="status-badge {room.StatusName.toLowerCase()}">
-										{room.StatusName}
+									<h3>{room.RoomName || 'Unnamed Room'}</h3>
+									<span class="status-badge {((room.StatusName || '').toLowerCase())}">
+										{room.StatusName || 'Unknown'}
 									</span>
 								</div>
 							</div>

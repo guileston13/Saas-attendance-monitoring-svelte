@@ -47,7 +47,7 @@ export async function load({ request, cookies, url }) {
     console.log('Is authenticated:', authenticated);
     
     if (session) {
-        console.log('Session details:', { userId: session.userId, email: session.email, role: session.role });
+        console.log('Session details:', { userId: session.userId, email: session?.email, role: session?.role });
     }
     
     return {

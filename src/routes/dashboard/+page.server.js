@@ -18,7 +18,7 @@ export async function load({ request }) {
 		// Load dashboard data based on user role
 		let dashboardData = { session };
 		
-		if (session.role === 'Admin') {
+		if (session?.role === 'Admin') {
 			const [sections, students, teachers, subjects] = await Promise.all([
 				getAllSections(),
 				getAllStudents(),
@@ -39,7 +39,7 @@ export async function load({ request }) {
 					totalSubjects: subjects.length
 				}
 			};
-		} else if (session.role === 'Teacher') {
+		} else if (session?.role === 'Teacher') {
 			// For teachers, show their sections and subjects
 			const sections = await getAllSections(); // In real app, filter by teacher
 			dashboardData = {
@@ -50,7 +50,7 @@ export async function load({ request }) {
 					myStudents: sections.reduce((total, section) => total + (section.StudentCount || 0), 0)
 				}
 			};
-		} else if (session.role === 'Student') {
+		} else if (session?.role === 'Student') {
 			// For students, show their enrolled sections
 			const sections = await getAllSections(); // In real app, filter by student
 			dashboardData = {

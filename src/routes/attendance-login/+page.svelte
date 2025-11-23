@@ -66,10 +66,8 @@
   let settingsPass = "";
   let settingsError = "";
   // 🌐 Settings values
-  let deviceName = "";
-  let selectedSubject = "";
+  let roomId = "";
   let SERVER_URL = "/attendance-login/api";
-  let subjectList = [];
   let roomList = [];
 
   let eventSource;
@@ -77,14 +75,33 @@
   // 🎨 Loading animation sequence
   onMount(async () => {
     // Load settings from localStorage
-    deviceName = localStorage.getItem("deviceName") || "";
-    selectedSubject = localStorage.getItem("selectedSubject") || "";
+    roomId = localStorage.getItem("roomId") || "";
     SERVER_URL = localStorage.getItem("SERVER_URL") || "/attendance-login/api";
+
+    // Simulate loading sequence
+    const loadingSteps = [
+      { progress: 20, text: 'Loading settings...' },
+      { progress: 40, text: 'Initializing camera...' },
+      { progress: 60, text: 'Loading AI models...' },
+      { progress: 80, text: 'Preparing interface...' },
+      { progress: 100, text: 'Ready!' }
+    ];
+
+    for (const step of loadingSteps) {
+      loadingProgress = step.progress;
+      loadingText = step.text;
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    // Fade out and show main screen
+    loadingFadeOut = true;
+    await new Promise(resolve => setTimeout(resolve, 800));
+    isLoading = false;
+    formVisible = true;
   });
 
   $: if (typeof window !== "undefined") {
-    localStorage.setItem("deviceName", deviceName);
-    localStorage.setItem("selectedSubject", selectedSubject);
+    localStorage.setItem("roomId", roomId);
     localStorage.setItem("SERVER_URL", SERVER_URL);
   }
 
@@ -122,28 +139,13 @@
       const data = await res.json();
       if (data.rooms) {
         roomList = data.rooms;
-        // If deviceName is not set, default to first room
-        if (!deviceName && roomList.length > 0) {
-          deviceName = roomList[0].RoomName;
+        // If roomId is not set, default to first room
+        if (!roomId && roomList.length > 0) {
+          roomId = roomList[0].RoomID;
         }
       }
     } catch (e) {
       console.error("Failed to fetch rooms", e);
-    }
-
-    // Fetch subject list from API
-    try {
-      const res = await fetch("/attendance-login/api/subjects");
-      const data = await res.json();
-      if (data.subjects) {
-        subjectList = data.subjects;
-        // If selectedSubject is not set, default to first subject
-        if (!selectedSubject && subjectList.length > 0) {
-          selectedSubject = subjectList[0].SubjectName;
-        }
-      }
-    } catch (e) {
-      console.error("Failed to fetch subjects", e);
     }
 
     eventSource = new EventSource("/api/stream");
@@ -177,11 +179,8 @@
   });
 
   // Save settings to localStorage when they change
-  $: if (typeof window !== 'undefined' && deviceName) {
-    localStorage.setItem("deviceName", deviceName);
-  }
-  $: if (typeof window !== 'undefined' && selectedSubject) {
-    localStorage.setItem("selectedSubject", selectedSubject);
+  $: if (typeof window !== 'undefined' && roomId) {
+    localStorage.setItem("roomId", roomId);
   }
   $: if (typeof window !== 'undefined' && SERVER_URL) {
     localStorage.setItem("SERVER_URL", SERVER_URL);
@@ -191,10 +190,45 @@
   function navigateTo(screen) {
     currentScreen = screen;
     formVisible = false;
+    
+    // Handle login screen - start camera
+    if (screen === 'login') {
+      showLoginPage = true;
+      setTimeout(() => startLoginCamera(), 300);
+    } else {
+      showLoginPage = false;
+    }
+    
+    // Handle settings auth screen
+    if (screen === 'settings-auth') {
+      showSettingsAuth = true;
+    }
+    
+    // Handle settings screen
+    if (screen === 'settings') {
+      showSettingsPage = true;
+      showSettingsAuth = false;
+    }
+    
     setTimeout(() => formVisible = true, 100);
   }
 
   function goBack() {
+    // Clean up based on current screen
+    if (currentScreen === 'login') {
+      stopLoginCamera();
+      showLoginPage = false;
+    }
+    if (currentScreen === 'settings-auth') {
+      showSettingsAuth = false;
+      settingsUser = "";
+      settingsPass = "";
+      settingsError = "";
+    }
+    if (currentScreen === 'settings') {
+      showSettingsPage = false;
+    }
+    
     currentScreen = 'main';
     formVisible = false;
     setTimeout(() => formVisible = true, 100);
@@ -312,6 +346,7 @@
     };
 
     // Move to face capture page
+    currentScreen = 'face';
     showForm = false;
     showFacePage = true;
 
@@ -405,6 +440,13 @@
 
   async function startScan() {
     try {
+      // Check if video element exists
+      if (!video) {
+        console.error("Video element not ready, retrying...");
+        setTimeout(() => startScan(), 100);
+        return;
+      }
+      
       // Check if mediaDevices is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("Camera API not available. Please use HTTPS or localhost.");
@@ -785,7 +827,7 @@
       const res = await fetch(`${SERVER_URL}/login-recognize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageData, deviceName, selectedSubject })
+        body: JSON.stringify({ image: imageData, roomId })
       });
 
       const data = await res.json();
@@ -844,8 +886,8 @@
   }
 
   function saveDeviceName() {
-    localStorage.setItem("deviceName", deviceName);
-    alert("✅ Device name saved!");
+    localStorage.setItem("roomId", roomId);
+    alert("✅ Room saved!");
   }
   function openSettingsAuth() {
     showSettingsAuth = true;
@@ -854,8 +896,7 @@
     const validUser = "admin";
     const validPass = "1234";
     if (settingsUser === validUser && settingsPass === validPass) {
-      showSettingsAuth = false;
-      showSettingsPage = true;
+      navigateTo('settings');
       settingsError = "";
     } else {
       settingsError = "Invalid username or password";
@@ -1317,23 +1358,11 @@
           <div class="settings-content">
             <form class="settings-form" on:submit|preventDefault={saveDeviceName}>
               <div class="settings-group">
-                <label class="settings-label" for="deviceName">Device Name (Room)</label>
+                <label class="settings-label" for="roomId">Room</label>
                 <div class="settings-select-wrapper">
-                  <select id="deviceName" bind:value={deviceName} class="settings-select">
+                  <select id="roomId" bind:value={roomId} class="settings-select">
                     {#each roomList as room}
-                      <option value={room.RoomName}>{room.RoomName}</option>
-                    {/each}
-                  </select>
-                  <div class="select-arrow">▼</div>
-                </div>
-              </div>
-
-              <div class="settings-group">
-                <label class="settings-label" for="selectedSubject">Subject</label>
-                <div class="settings-select-wrapper">
-                  <select id="selectedSubject" bind:value={selectedSubject} class="settings-select">
-                    {#each subjectList as subject}
-                      <option value={subject.SubjectName}>{subject.SubjectName}</option>
+                      <option value={room.RoomID}>{room.RoomName}</option>
                     {/each}
                   </select>
                   <div class="select-arrow">▼</div>
@@ -1818,6 +1847,7 @@
     align-items: center;
     justify-content: center;
     padding: 2rem;
+    color: #0f172a; /* default main text color: dark for readability */
   }
 
   /* 🎨 Screen Container */
@@ -1853,7 +1883,7 @@
   .brand-title {
     font-size: 2.5rem;
     font-weight: 700;
-    color: white;
+    color: #0f172a;
     margin: 0 0 0.5rem 0;
     text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
     letter-spacing: -0.02em;
@@ -1861,7 +1891,7 @@
 
   .brand-subtitle {
     font-size: 1.1rem;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(15, 23, 42, 0.8);
     margin: 0;
     font-weight: 400;
   }
@@ -1882,7 +1912,7 @@
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 1rem;
-    color: white;
+    color: #0f172a;
     text-decoration: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
@@ -1972,7 +2002,7 @@
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
+    color: #0f172a;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2003,6 +2033,7 @@
     border-radius: 1.5rem;
     padding: 2rem;
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+    color: #0f172a; /* dark text for readability on light/white backgrounds */
     opacity: 0;
     transform: translateY(30px) scale(0.95);
     transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2031,7 +2062,7 @@
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
+    color: #0f172a;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2052,14 +2083,14 @@
   .form-title, .face-title, .login-title, .auth-form-title, .settings-title {
     font-size: 1.75rem;
     font-weight: 700;
-    color: white;
+    color: #0f172a;
     margin: 0 0 0.5rem 0;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   }
 
   .form-subtitle, .face-subtitle, .login-subtitle, .auth-form-subtitle, .settings-subtitle {
     font-size: 1rem;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(15, 23, 42, 0.8);
     margin: 0;
     font-weight: 400;
   }
@@ -2088,7 +2119,7 @@
   .input-label, .auth-input-label {
     font-size: 0.9rem;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(15, 23, 42, 0.9);
     margin-bottom: 0.5rem;
     letter-spacing: 0.01em;
   }
@@ -2114,14 +2145,14 @@
     padding: 1rem;
     background: transparent;
     border: none;
-    color: white;
+    color: #0f172a;
     font-size: 1rem;
     outline: none;
     font-family: inherit;
   }
 
   .form-input::placeholder, .auth-form-input::placeholder {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(15, 23, 42, 0.6);
   }
 
   .input-glow, .auth-input-glow {
@@ -2219,11 +2250,11 @@
   .instruction-icon svg {
     width: 18px;
     height: 18px;
-    color: white;
+    color: #0f172a;
   }
 
   .instruction-text {
-    color: white;
+    color: #0f172a;
     font-size: 0.9rem;
     font-weight: 500;
   }
@@ -2250,7 +2281,7 @@
   }
 
   .preview-label {
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(15, 23, 42, 0.8);
     font-size: 0.8rem;
     font-weight: 500;
     margin-top: 0.5rem;
@@ -2271,14 +2302,14 @@
   }
 
   .completion-message h3 {
-    color: white;
+    color: #0f172a;
     font-size: 1.25rem;
     font-weight: 600;
     margin: 0 0 0.5rem 0;
   }
 
   .completion-message p {
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(15, 23, 42, 0.8);
     margin: 0;
   }
 
@@ -2433,7 +2464,7 @@
   }
 
   .result-message {
-    color: white;
+    color: #0f172a;
     font-size: 1rem;
     font-weight: 600;
     margin: 0;
@@ -2474,7 +2505,7 @@
     display: block;
     font-size: 0.9rem;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(15, 23, 42, 0.9);
     margin-bottom: 0.5rem;
   }
 
@@ -2488,7 +2519,7 @@
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 0.75rem;
-    color: white;
+    color: #0f172a;
     font-size: 1rem;
     outline: none;
     font-family: inherit;
@@ -2503,7 +2534,7 @@
   }
 
   .settings-select::placeholder, .settings-input::placeholder {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(15, 23, 42, 0.6);
   }
 
   .select-arrow {
@@ -2511,7 +2542,7 @@
     right: 1rem;
     top: 50%;
     transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(15, 23, 42, 0.6);
     pointer-events: none;
   }
 

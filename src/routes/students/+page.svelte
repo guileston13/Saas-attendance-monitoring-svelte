@@ -268,7 +268,7 @@
 			<h1>Students Management</h1>
 			<p class="subtitle">Manage student records and information</p>
 		</div>
-		{#if session.role === 'Admin'}
+		{#if session?.role === 'Admin'}
 			<button class="btn btn-primary" on:click={() => openModal()}>
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<line x1="12" y1="5" x2="12" y2="19"></line>
@@ -361,7 +361,7 @@
 								<th>Full Name</th>
 								<th>Year Level</th>
 								<th>Status</th>
-								{#if session.role === 'Admin'}
+								{#if session?.role === 'Admin'}
 									<th>Actions</th>
 								{/if}
 							</tr>
@@ -390,7 +390,7 @@
 											{student.StatusName}
 										</span>
 									</td>
-									{#if session.role === 'Admin'}
+									{#if session?.role === 'Admin'}
 										<td>
 											<div class="actions">
 												<button 
@@ -411,7 +411,7 @@
 								</tr>
 							{:else}
 								<tr>
-									<td colspan={session.role === 'Admin' ? '5' : '4'} class="text-center">
+									<td colspan={session?.role === 'Admin' ? 5 : 4} class="text-center">
 										<div class="empty-state">
 											<h3>No students found</h3>
 											<p>{searchTerm ? 'Try adjusting your search terms' : 'No student records available'}</p>

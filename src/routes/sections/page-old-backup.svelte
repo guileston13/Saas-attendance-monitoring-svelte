@@ -217,7 +217,7 @@
 <div class="page">
 	<div class="page-header">
 		<h1>Sections Management</h1>
-		{#if session.role === 'Admin'}
+		{#if session?.role === 'Admin'}
 			<button class="btn btn-primary" on:click={() => openModal()}>
 				Add New Section
 			</button>
@@ -267,7 +267,7 @@
 							</td>
 							<td>
 								<div class="actions">
-									{#if session.role === 'Admin'}
+									{#if session?.role === 'Admin'}
 										<button 
 											class="btn btn-small btn-secondary"
 											on:click={() => openModal(section)}
@@ -355,7 +355,7 @@
 				<div class="students-section">
 					<div class="section-header">
 						<h4>Enrolled Students ({sectionStudents.length})</h4>
-						{#if session.role === 'Admin' || session.role === 'Teacher'}
+						{#if session?.role === 'Admin' || session?.role === 'Teacher'}
 							<button 
 								class="btn btn-small btn-primary"
 								on:click={() => showAddStudentForm = !showAddStudentForm}
@@ -399,7 +399,7 @@
 									<th>Student ID</th>
 									<th>Name</th>
 									<th>Year Level</th>
-									{#if session.role === 'Admin' || session.role === 'Teacher'}
+									{#if session?.role === 'Admin' || session?.role === 'Teacher'}
 										<th>Actions</th>
 									{/if}
 								</tr>
@@ -414,7 +414,7 @@
 											{student.LastName}
 										</td>
 										<td>{student.YearLevel}</td>
-										{#if session.role === 'Admin' || session.role === 'Teacher'}
+										{#if session?.role === 'Admin' || session?.role === 'Teacher'}
 											<td>
 												<button 
 													class="btn btn-small btn-danger"
@@ -427,7 +427,7 @@
 									</tr>
 								{:else}
 									<tr>
-										<td colspan={session.role === 'Admin' || session.role === 'Teacher' ? '4' : '3'} class="text-center">
+										<td colspan={session?.role === 'Admin' || session?.role === 'Teacher' ? 4 : 3} class="text-center">
 											No students enrolled
 										</td>
 									</tr>

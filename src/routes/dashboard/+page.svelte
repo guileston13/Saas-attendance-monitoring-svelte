@@ -164,7 +164,7 @@
 		</div>
 		<div>
 			<h1>Dashboard</h1>
-			<p class="welcome-text">Welcome back, <span class="user-email">{session.email}</span></p>
+			<p class="welcome-text">Welcome back, <span class="user-email">{session?.email}</span></p>
 		</div>
 	</div>
 	
@@ -178,7 +178,7 @@
 	{/if}
 	
 	<!-- Admin Dashboard -->
-	{#if session.role === 'Admin'}
+	{#if session?.role === 'Admin'}
 		<div class="stats-grid" class:visible={statsVisible}>
 			<div class="stat-card stat-card-1">
 				<div class="stat-glow"></div>
@@ -290,7 +290,7 @@
 	{/if}
 	
 	<!-- Teacher Dashboard -->
-	{#if session.role === 'Teacher'}
+	{#if session?.role === 'Teacher'}
 		<div class="stats-grid">
 			<div class="stat-card">
 				<div class="stat-number">{stats.mySections || 0}</div>
@@ -337,7 +337,7 @@
 	{/if}
 	
 	<!-- Student Dashboard -->
-	{#if session.role === 'Student'}
+	{#if session?.role === 'Student'}
 		<div class="stats-grid">
 			<div class="stat-card">
 				<div class="stat-number">{stats.enrolledSections || 0}</div>

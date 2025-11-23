@@ -44,8 +44,8 @@
 		window.addEventListener('resize', handleResize);
 		
 		// Listen for navigation events to ensure session state is updated
-		const unsubscribe = page.subscribe(() => {
-			if ($page.url.pathname === '/logout') {
+		const unsubscribe = page.subscribe(($pageValue) => {
+			if ($pageValue.url.pathname === '/logout') {
 				// Force reload of layout data
 				invalidateAll();
 			}

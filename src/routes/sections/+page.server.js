@@ -157,6 +157,44 @@ export const actions = {
 		}
 	},
 	
+	addSubject: async ({ request }) => {
+		const session = getSessionFromCookies(request.headers.get('cookie'));
+		
+		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
+			return { success: false, error: 'Unauthorized' };
+		}
+		
+		try {
+			const data = await request.formData();
+			const sectionId = parseInt(data.get('sectionId'));
+			const subjectId = parseInt(data.get('subjectId'));
+			const teacherId = data.get('teacherId') ? parseInt(data.get('teacherId')) : null;
+			const startTime = data.get('startTime') || null;
+			const endTime = data.get('endTime') || null;
+			
+			if (!sectionId || !subjectId) {
+				return { success: false, error: 'Section ID and Subject ID are required' };
+			}
+			
+			// Insert or update section_subjects
+			const query = `
+				INSERT INTO section_subjects (SectionID, SubjectID, TeacherID, StartTime, EndTime)
+				VALUES (?, ?, ?, ?, ?)
+				ON DUPLICATE KEY UPDATE 
+					TeacherID = VALUES(TeacherID),
+					StartTime = VALUES(StartTime),
+					EndTime = VALUES(EndTime)
+			`;
+			
+			await executeQuery(query, [sectionId, subjectId, teacherId, startTime, endTime]);
+			
+			return { success: true, message: 'Subject added successfully' };
+		} catch (error) {
+			console.error('Add subject error:', error);
+			return { success: false, error: 'Failed to add subject' };
+		}
+	},
+	
 	enrollStudents: async ({ request }) => {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 		

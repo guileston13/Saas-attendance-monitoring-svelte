@@ -15,6 +15,7 @@ let showModal = false;
 let editingSubject = null;
 let loading = false;
 let searchTerm = '';
+$: searchTermLower = (searchTerm || '').toLowerCase();
 let isLoading = true;
 let loadingProgress = 0;
 let loadingText = 'Initializing...';
@@ -76,11 +77,14 @@ let formData = {
 	statusId: ''
 };
 
+// Derived room lookup map for faster roomName access
+$: roomMap = Object.fromEntries((rooms || []).map(r => [r.RoomID, r.RoomName]));
+
 // Filter subjects based on search term
 $: filteredSubjects = subjects.filter(subject => 
-	subject.SubjectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-	subject.SubjectCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-	(subject.RoomID && subject.RoomID.toLowerCase().includes(searchTerm.toLowerCase()))
+	(subject.SubjectName || '').toLowerCase().includes(searchTermLower) ||
+	(subject.SubjectCode || '').toLowerCase().includes(searchTermLower) ||
+	(roomMap[subject.RoomID] || '').toLowerCase().includes(searchTermLower)
 );
 
 function openModal(subject = null) {
@@ -375,7 +379,7 @@ async function handleDelete(subjectId) {
 								<th>Start Time</th>
 								<th>End Time</th>
 								<th>Status</th>
-								{#if session.role === 'Admin'}
+								{#if session?.role === 'Admin'}
 									<th>Actions</th>
 								{/if}
 							</tr>
@@ -389,11 +393,11 @@ async function handleDelete(subjectId) {
 									<td>{subject.StartTime || '-'}</td>
 									<td>{subject.EndTime || '-'}</td>
 									<td>
-										<span class="status-badge {subject.StatusName.toLowerCase()}">
-											{subject.StatusName}
+										<span class="status-badge {(subject.StatusName || '').toLowerCase()}">
+											{subject.StatusName || 'Unknown'}
 										</span>
 									</td>
-									{#if session.role === 'Admin'}
+									{#if session?.role === 'Admin'}
 										<td>
 											<div class="actions">
 												<button 
@@ -414,7 +418,7 @@ async function handleDelete(subjectId) {
 								</tr>
 							{:else}
 								<tr>
-									<td colspan={Number(session.role === 'Admin' ? '7' : '6')} class="text-center">
+									<td colspan={session?.role === 'Admin' ? 7 : 6} class="text-center">
 										<div class="empty-state">
 											<h3>No subjects found</h3>
 											<p>{searchTerm ? 'Try adjusting your search terms' : 'No subject records available'}</p>

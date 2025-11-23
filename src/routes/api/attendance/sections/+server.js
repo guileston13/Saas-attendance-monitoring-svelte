@@ -16,10 +16,10 @@ export async function GET({ request }) {
     try {
         let sections = [];
         
-        if (session.role === 'Admin') {
+        if (session?.role === 'Admin') {
             // Admin can see all sections
             sections = await getAllSections();
-        } else if (session.role === 'Teacher') {
+        } else if (session?.role === 'Teacher') {
             // Teacher can only see sections they are assigned to
             sections = await getTeacherSections(session.userId);
         }
@@ -27,7 +27,7 @@ export async function GET({ request }) {
         return new Response(JSON.stringify({ 
             success: true, 
             sections: sections,
-            userRole: session.role,
+            userRole: session?.role,
             totalSections: sections.length
         }), {
             status: 200,

@@ -66,6 +66,7 @@
 	let editingTeacher = null;
 	let loading = false;
 	let searchTerm = '';
+	$: searchTermLower = (searchTerm || '').toLowerCase();
 	
 	// Form data
 	let formData = {
@@ -78,9 +79,9 @@
 	
 	// Filter teachers based on search term
 	$: filteredTeachers = teachers.filter(teacher => 
-		teacher.FirstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-		teacher.LastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-		(teacher.Role && teacher.Role.toLowerCase().includes(searchTerm.toLowerCase()))
+		(teacher.FirstName || '').toLowerCase().includes(searchTermLower) ||
+		(teacher.LastName || '').toLowerCase().includes(searchTermLower) ||
+		(teacher.Role || '').toLowerCase().includes(searchTermLower)
 	);
 	
 	function openModal(teacher = null) {
@@ -276,7 +277,7 @@
 			<h1>Teachers Management</h1>
 			<p class="subtitle">Manage teacher records and information</p>
 		</div>
-		{#if session.role === 'Admin'}
+		{#if session?.role === 'Admin'}
 			<button class="btn btn-primary" on:click={() => openModal()}>
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<line x1="12" y1="5" x2="12" y2="19"></line>
@@ -367,7 +368,7 @@
 								<th>Full Name</th>
 								<th>Role/Position</th>
 								<th>Status</th>
-								{#if session.role === 'Admin'}
+								{#if session?.role === 'Admin'}
 									<th>Actions</th>
 								{/if}
 							</tr>
@@ -391,7 +392,7 @@
 											{teacher.StatusName}
 										</span>
 									</td>
-									{#if session.role === 'Admin'}
+									{#if session?.role === 'Admin'}
 										<td>
 											<div class="actions">
 												<button 
@@ -412,7 +413,7 @@
 								</tr>
 							{:else}
 								<tr>
-									<td colspan={Number(session.role === 'Admin' ? '4' : '3')} class="text-center">
+									<td colspan={session?.role === 'Admin' ? 4 : 3} class="text-center">
 										<div class="empty-state">
 											<h3>No teachers found</h3>
 											<p>{searchTerm ? 'Try adjusting your search terms' : 'No teacher records available'}</p>

@@ -189,13 +189,16 @@
 						tempAttendanceData[studentIdStr] = {};
 					}
 					
-					// Fill in missing dates with 'absent' for UI consistency
+					// Don't pre-fill with 'absent' - leave as empty
 					calendarDays.forEach(day => {
 						if (!tempAttendanceData[studentIdStr][day.date]) {
-							tempAttendanceData[studentIdStr][day.date] = 'absent';
+							tempAttendanceData[studentIdStr][day.date] = '';
 						}
 					});
 				});
+				
+				// Don't auto-detect DF on load - only when manually marking or cron marks absence
+				// This prevents all empty dates from being treated as absences
 				
 				// Update attendance data with new reference for reactivity
 				attendanceData = tempAttendanceData;
@@ -242,8 +245,21 @@
 		if (updating) return; // Prevent multiple simultaneous updates
 		
 		const studentIdStr = studentId.toString();
-		const current = attendanceData[studentIdStr]?.[date] || 'absent';
-		const newStatus = current === 'present' ? 'Absent' : 'Present'; // Database expects capitalized
+		const current = (attendanceData[studentIdStr]?.[date] || '').toLowerCase();
+		
+		// Cycle through: empty -> present -> late -> absent -> empty
+		let newStatus;
+		if (current === '' || current === 'absent') {
+			newStatus = 'Present';
+		} else if (current === 'present') {
+			newStatus = 'Late';
+		} else if (current === 'late') {
+			newStatus = 'Absent';
+		} else if (current === 'df') {
+			newStatus = ''; // Clear DF status
+		} else {
+			newStatus = 'Present';
+		}
 		
 		updating = true;
 		
@@ -272,6 +288,9 @@
 					attendanceData[studentIdStr] = {};
 				}
 				attendanceData[studentIdStr][date] = newStatus.toLowerCase();
+				
+				// Check for DF after update
+				checkAndMarkDF(studentId, attendanceData);
 				
 				// Trigger reactivity
 				attendanceData = { ...attendanceData };
@@ -313,15 +332,59 @@
 		return month ? month.label : '';
 	}
 	
+	// Check for 3 consecutive absences and mark as DF
+	function checkAndMarkDF(studentId, dataObj) {
+		const studentIdStr = studentId.toString();
+		if (!dataObj[studentIdStr]) return;
+		
+		// Get today's date for comparison
+		const today = new Date().toISOString().split('T')[0];
+		
+		// Get sorted dates (only past dates, not future)
+		const dates = calendarDays
+			.filter(d => d.date <= today) // Only consider today and past dates
+			.map(d => d.date)
+			.sort();
+		
+		let consecutiveAbsences = 0;
+		
+		for (let i = 0; i < dates.length; i++) {
+			const status = (dataObj[studentIdStr][dates[i]] || '').toLowerCase();
+			
+			// Only count actual 'Absent' status, not empty strings
+			if (status === 'absent') {
+				consecutiveAbsences++;
+				
+				// If 3 consecutive absences, mark as DF
+				if (consecutiveAbsences >= 3) {
+					// Mark all 3 days as DF
+					for (let j = i - 2; j <= i; j++) {
+						if (j >= 0) {
+							dataObj[studentIdStr][dates[j]] = 'DF';
+						}
+					}
+					consecutiveAbsences = 0; // Reset counter
+				}
+			} else if (status === 'present' || status === 'late') {
+				consecutiveAbsences = 0; // Reset on present or late
+			} else if (status === '') {
+				// Empty status resets the counter (no record = not absent yet)
+				consecutiveAbsences = 0;
+			}
+		}
+	}
+	
 	// Count attendance statistics
 	function getAttendanceStats(studentId) {
-		if (!attendanceData[studentId]) return { present: 0, absent: 0, total: 0 };
+		if (!attendanceData[studentId]) return { present: 0, late: 0, absent: 0, df: 0, total: 0 };
 		
 		const records = Object.values(attendanceData[studentId]);
-		const present = records.filter(status => status === 'present').length;
-		const absent = records.filter(status => status === 'absent').length;
+		const present = records.filter(status => status.toLowerCase() === 'present').length;
+		const late = records.filter(status => status.toLowerCase() === 'late').length;
+		const absent = records.filter(status => status.toLowerCase() === 'absent').length;
+		const df = records.filter(status => status.toLowerCase() === 'df').length;
 		
-		return { present, absent, total: records.length };
+		return { present, late, absent, df, total: records.length };
 	}
 	
 	onMount(() => {
@@ -557,26 +620,38 @@
 											</div>
 										</td>
 										{#each calendarDays as day, dayIndex}
-											{@const status = attendanceData[student.StudentID]?.[day.date] || 'absent'}
+											{@const status = attendanceData[student.StudentID]?.[day.date] || ''}
 											<td class="attendance-cell">
 												<button 
-													class="attendance-btn {status}"
+													class="attendance-btn {status.toLowerCase()}"
 													on:click={(e) => {
 														e.preventDefault();
 														e.stopPropagation();
 														toggleAttendance(student.StudentID, day.date);
 													}}
-													title="Click to toggle attendance for {day.dayName} {day.day} - Current: {status}"
+													title="Click to toggle attendance for {day.dayName} {day.day} - Current: {status || 'No record'}"
 													disabled={updating}
 												>
-													{status === 'present' ? '✅' : '❌'}
+													{#if status.toLowerCase() === 'present'}
+														✅
+													{:else if status.toLowerCase() === 'late'}
+														⏰
+													{:else if status.toLowerCase() === 'df'}
+														DF
+													{:else if status === ''}
+														-
+													{:else}
+														-
+													{/if}
 												</button>
 											</td>
 										{/each}
 										<td class="stats-cell">
 											<div class="student-stats">
 												<span class="present-count">✅ {stats.present}</span>
-												<span class="absent-count">❌ {stats.absent}</span>
+												<span class="late-count">🔴 {stats.late}</span>
+												<span class="absent-count">- {stats.absent}</span>
+												<span class="df-count">DF {stats.df}</span>
 												<span class="percentage">
 													{stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0}%
 												</span>
@@ -956,11 +1031,30 @@
 	}
 	
 	.attendance-btn.present {
-		background: #d4edda;
+		background: #28a745;
+		color: white;
+	}
+	
+	.attendance-btn.late {
+		background: #dc3545;
+		color: white;
+	}
+	
+	.attendance-btn.df {
+		background: #000000;
+		color: white;
+		font-size: 0.75rem;
+		font-weight: bold;
 	}
 	
 	.attendance-btn.absent {
-		background: rgba(231, 76, 60, 0.1);
+		background: transparent;
+		border: 1px solid #ddd;
+	}
+	
+	.attendance-btn:not(.present):not(.late):not(.df):not(.absent) {
+		background: transparent;
+		border: 1px solid #ddd;
 	}
 	
 	.attendance-btn:disabled {
@@ -977,11 +1071,22 @@
 	}
 	
 	.present-count {
-		color: #27ae60;
+		color: #28a745;
+		font-weight: 600;
+	}
+	
+	.late-count {
+		color: #dc3545;
+		font-weight: 600;
 	}
 	
 	.absent-count {
-		color: #e74c3c;
+		color: #6c757d;
+	}
+	
+	.df-count {
+		color: #000000;
+		font-weight: bold;
 	}
 	
 	.percentage {

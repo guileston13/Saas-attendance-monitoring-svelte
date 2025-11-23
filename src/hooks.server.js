@@ -1,4 +1,15 @@
 import { error } from '@sveltejs/kit';
+import { initializeCronJobs } from './jobs/cronScheduler.js';
+
+// Initialize cron jobs when server starts
+let cronJobs = null;
+
+// Start cron jobs
+if (!cronJobs) {
+  console.log('🌟 Server starting - Initializing cron jobs...');
+  cronJobs = initializeCronJobs();
+  console.log('✅ Cron jobs initialized successfully!');
+}
 
 /** @type {import('@sveltejs/kit').Handle} */
 export async function handle({ event, resolve }) {

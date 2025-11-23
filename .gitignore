@@ -36,3 +36,10 @@ coverage/
 # Custom ignores
 optimization_complete.txt
 
+# SSL certificates
+*.pem
+*.crt
+*.key
+*.cnf
+generate-cert.bat
+

@@ -1,19 +1,21 @@
 <script>
 	import { page } from '$app/stores';
 	import { handleLogout } from '$lib/logout.js';
-	
-	export let session;
+    
+	/** @type {any} */
+	export let session = null;
 	export let currentSection = 'Dashboard';
 	export let sidebarOpen = false;
 	export let isMobile = false;
-	
-	$: menuItems = getMenuItems(session.role);
+    
+	$: userRole = session?.role || 'Guest';
+	$: menuItems = getMenuItems(userRole);
 	
 	// Track current path for reactivity
 	$: currentPath = $page.url.pathname;
 	
 	// Reactive statement to compute active menu items based on current path and session
-	$: activeMenuItems = $page.url.pathname && getMenuItems(session.role).map(item => ({
+	$: activeMenuItems = $page.url.pathname && getMenuItems(userRole).map(item => ({
 		...item,
 		isActive: isMenuItemActive(item.href)
 	}));
@@ -111,15 +113,17 @@
 	</nav>
 	
 	<div class="sidebar-footer">
+		{#if session}
 		<div class="user-info">
 			<div class="user-avatar">
-				{session.email.charAt(0).toUpperCase()}
+				{session.email ? session.email.charAt(0).toUpperCase() : 'U'}
 			</div>
 			<div class="user-details">
 				<span class="user-email">{session.email}</span>
 				<span class="user-role">{session.role}</span>
 			</div>
 		</div>
+		{/if}
 		<button type="button" class="logout-btn" on:click={handleLogout}>
 			<span class="nav-icon">🚪</span>
 			<span class="nav-text">Logout</span>

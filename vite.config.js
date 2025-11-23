@@ -9,8 +9,8 @@ export default defineConfig({
 
   server: {
     host: true,  // listen on all interfaces
-    port: 4173,
-    https: {},
+    port: 5173,
+    // https disabled for development
     allowedHosts: [
       'localhost',
       'desktop-r98pm6a.local',
@@ -18,7 +18,8 @@ export default defineConfig({
       '172.27.44.17',
       '172.27.44.73',
       '172.27.44.213',
-      '10.136.35.91'
+      '10.136.35.91',
+      '192.168.1.64'
     ],
     fs: {
       allow: [
@@ -32,10 +33,7 @@ export default defineConfig({
   preview: {
     host: true,
     port: 4173,
-    https: {
-      key: fs.readFileSync('./localhost+1-key.pem'),
-      cert: fs.readFileSync('./localhost+1.pem')
-    },
+    // https disabled for development
     allowedHosts: [
       'localhost',
       'desktop-r98pm6a.local',
@@ -44,7 +42,8 @@ export default defineConfig({
       '172.27.44.73',
       '172.27.44.213',
       '10.136.35.91',
-      '192.168.56.1'
+      '192.168.56.1',
+      '192.168.1.64'
     ]
     // ✅ fs cannot go here
   }

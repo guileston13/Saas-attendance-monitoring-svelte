@@ -19,6 +19,7 @@
 	let showSubjectModal = false;
 	let showStudentModal = false;
 	let showSubjectSelectionModal = false;
+	let showEditSubjectModal = false;
 	let editingSection = null;
 	let selectedSection = null;
 	let selectedSubject = null;
@@ -161,6 +162,51 @@
 	function closeSubjectSelectionModal() {
 		console.log('Closing subject selection modal');
 		showSubjectSelectionModal = false;
+	}
+
+	function openEditSubjectModal(subject) {
+		editingSubject = { ...subject };
+		showEditSubjectModal = true;
+	}
+
+	function closeEditSubjectModal() {
+		showEditSubjectModal = false;
+		editingSubject = null;
+	}
+
+	async function updateSubject() {
+		if (!editingSubject || !selectedSection) return;
+		
+		loading = true;
+		
+		try {
+			const response = await fetch(`/api/sections/${selectedSection.SectionID}/subjects/${editingSubject.SubjectID}`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					TeacherID: editingSubject.TeacherID || null,
+					RoomID: editingSubject.RoomID || null,
+					StartTime: editingSubject.StartTime || null,
+					EndTime: editingSubject.EndTime || null
+				})
+			});
+			
+			if (response.ok) {
+				closeEditSubjectModal();
+				await loadSectionSubjects(selectedSection.SectionID);
+				alert('Subject updated successfully');
+			} else {
+				const error = await response.json();
+				alert(error.error || 'Failed to update subject');
+			}
+		} catch (error) {
+			console.error('Error updating subject:', error);
+			alert('Failed to update subject');
+		} finally {
+			loading = false;
+		}
 	}
 
 	function selectSubjectForEnrollment(subject) {
@@ -642,6 +688,26 @@
 						{/each}
 					</select>
 				</div>
+
+				<div class="form-group">
+					<label for="startTime">Start Time:</label>
+					<input 
+						id="startTime" 
+						name="startTime"
+						type="time" 
+						placeholder="HH:MM"
+					/>
+				</div>
+				
+				<div class="form-group">
+					<label for="endTime">End Time:</label>
+					<input 
+						id="endTime" 
+						name="endTime"
+						type="time" 
+						placeholder="HH:MM"
+					/>
+				</div>
 				
 				<div class="modal-actions">
 					<button type="button" class="btn btn-secondary" on:click={closeSubjectModal}>
@@ -685,23 +751,44 @@
 						</div>
 					{:else}
 						{#each sectionSubjects as subject (subject.SubjectID)}
-							<div 
-								class="subject-item"
-								on:click={() => selectSubjectForEnrollment(subject)}
-								on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSubjectForEnrollment(subject)}
-								role="button"
-								tabindex="0"
-							>
-								<div class="subject-info">
+							<div class="subject-item">
+								<div 
+									class="subject-info-clickable"
+									on:click={() => selectSubjectForEnrollment(subject)}
+									on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSubjectForEnrollment(subject)}
+									role="button"
+									tabindex="0"
+								>
 									<div class="subject-name">{subject.SubjectName}</div>
 									<div class="subject-code">{subject.SubjectCode}</div>
-									{#if subject.TeacherName}
-										<div class="subject-teacher">👨‍🏫 {subject.TeacherName}</div>
-									{/if}
+									<div class="subject-details">
+										{#if subject.TeacherName}
+											<div class="subject-teacher">👨‍🏫 {subject.TeacherName}</div>
+										{/if}
+										{#if subject.StartTime && subject.EndTime}
+											<div class="subject-time">🕐 {subject.StartTime} - {subject.EndTime}</div>
+										{/if}
+										{#if subject.RoomName}
+											<div class="subject-room">🏫 {subject.RoomName}</div>
+										{/if}
+									</div>
 								</div>
-								<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<polyline points="9 18 15 12 9 6"></polyline>
-								</svg>
+								<div class="subject-actions">
+									<button 
+										type="button" 
+										class="btn-icon-small" 
+										on:click={(e) => { e.stopPropagation(); openEditSubjectModal(subject); }}
+										title="Edit Subject Schedule"
+									>
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+											<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+										</svg>
+									</button>
+									<svg class="chevron-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="9 18 15 12 9 6"></polyline>
+									</svg>
+								</div>
 							</div>
 						{/each}
 					{/if}
@@ -711,6 +798,73 @@
 			<div class="modal-actions">
 				<button type="button" class="btn btn-secondary" on:click={closeSubjectSelectionModal}>
 					Cancel
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Edit Subject Modal -->
+{#if showEditSubjectModal && editingSubject}
+	<div 
+		class="modal-overlay" 
+		on:click={closeEditSubjectModal}
+		on:keydown={(e) => e.key === 'Escape' && closeEditSubjectModal()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
+			<div class="modal-header">
+				<h3>Edit Subject Schedule - {editingSubject.SubjectName}</h3>
+				<button class="close-btn" on:click={closeEditSubjectModal}>&times;</button>
+			</div>
+			
+			<div class="modal-body">
+				<div class="form-group">
+					<label for="edit-teacherId">Assign Teacher:</label>
+					<select id="edit-teacherId" bind:value={editingSubject.TeacherID}>
+						<option value={null}>No teacher assigned</option>
+						{#each teachers as teacher}
+							<option value={teacher.TeacherID}>
+								{teacher.FirstName} {teacher.LastName}
+							</option>
+						{/each}
+					</select>
+				</div>
+				
+				<div class="form-group">
+					<label for="edit-startTime">Start Time:</label>
+					<input 
+						id="edit-startTime" 
+						type="time" 
+						bind:value={editingSubject.StartTime}
+						placeholder="HH:MM"
+					/>
+				</div>
+				
+				<div class="form-group">
+					<label for="edit-endTime">End Time:</label>
+					<input 
+						id="edit-endTime" 
+						type="time" 
+						bind:value={editingSubject.EndTime}
+						placeholder="HH:MM"
+					/>
+				</div>
+			</div>
+			
+			<div class="modal-actions">
+				<button type="button" class="btn btn-secondary" on:click={closeEditSubjectModal}>
+					Cancel
+				</button>
+				<button type="button" class="btn btn-primary" on:click={updateSubject} disabled={loading}>
+					{loading ? 'Updating...' : 'Update Subject'}
 				</button>
 			</div>
 		</div>
@@ -2354,14 +2508,52 @@
 		border: 1px solid rgba(255, 255, 255, 0.4);
 		border-radius: 8px;
 		margin-bottom: 12px;
-		cursor: pointer;
 		transition: all 0.3s ease-out;
 	}
 
 	.subject-item:hover {
 		background: rgba(255, 255, 255, 0.5);
 		border-color: rgba(59, 130, 246, 0.3);
-		transform: translateX(4px);
+	}
+
+	.subject-info-clickable {
+		flex: 1;
+		cursor: pointer;
+		padding: 4px;
+		border-radius: 6px;
+		transition: all 0.2s ease;
+	}
+
+	.subject-info-clickable:hover {
+		background: rgba(255, 255, 255, 0.2);
+	}
+
+	.subject-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.btn-icon-small {
+		background: rgba(59, 130, 246, 0.2);
+		border: 1px solid rgba(59, 130, 246, 0.3);
+		color: #3b82f6;
+		padding: 6px;
+		border-radius: 6px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.btn-icon-small:hover {
+		background: rgba(59, 130, 246, 0.3);
+		transform: scale(1.1);
+	}
+
+	.chevron-icon {
+		opacity: 0.5;
 	}
 
 	.subject-info {
@@ -2385,6 +2577,24 @@
 		font-size: 13px;
 		color: #3B82F6;
 		margin-top: 4px;
+	}
+
+	.subject-details {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin-top: 8px;
+	}
+
+	.subject-time {
+		font-size: 13px;
+		color: #10b981;
+		font-weight: 500;
+	}
+
+	.subject-room {
+		font-size: 13px;
+		color: #8b5cf6;
 	}
 
 	/* ===== EMPTY STATE ===== */

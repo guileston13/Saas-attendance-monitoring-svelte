@@ -26,9 +26,9 @@ export async function load({ request, url }) {
 		
 		// Load sections based on user role
 		let availableSections = [];
-		if (session.role === 'Admin') {
+		if (session?.role === 'Admin') {
 			availableSections = await getAllSections();
-		} else if (session.role === 'Teacher') {
+		} else if (session?.role === 'Teacher') {
 			availableSections = await getTeacherSections(session.userId);
 		}
 		
@@ -36,10 +36,10 @@ export async function load({ request, url }) {
 		for (const section of availableSections) {
 			try {
 				let sectionSubjects = [];
-				if (session.role === 'Admin') {
+				if (session?.role === 'Admin') {
 					const { getSectionSubjects } = await import('../../services/sectionService.js');
 					sectionSubjects = await getSectionSubjects(section.SectionID);
-				} else if (session.role === 'Teacher') {
+				} else if (session?.role === 'Teacher') {
 					sectionSubjects = await getTeacherSubjectsInSection(session.userId, section.SectionID);
 				}
 				section.subjectCount = sectionSubjects.length;
@@ -52,11 +52,11 @@ export async function load({ request, url }) {
 		// Load subjects if a section is selected
 		let availableSubjects = [];
 		if (selectedSectionId) {
-			if (session.role === 'Admin') {
+			if (session?.role === 'Admin') {
 				// Import and use the section service
 				const { getSectionSubjects } = await import('../../services/sectionService.js');
 				availableSubjects = await getSectionSubjects(parseInt(selectedSectionId));
-			} else if (session.role === 'Teacher') {
+			} else if (session?.role === 'Teacher') {
 				availableSubjects = await getTeacherSubjectsInSection(session.userId, parseInt(selectedSectionId));
 			}
 		}
