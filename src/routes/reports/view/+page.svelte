@@ -15,6 +15,9 @@
 	$: startDate = $page.url.searchParams.get("startDate");
 	$: endDate = $page.url.searchParams.get("endDate");
 	$: teacherId = $page.url.searchParams.get("teacherId");
+	$: subjectCode = $page.url.searchParams.get("subjectCode");
+	$: roomName = $page.url.searchParams.get("roomName");
+	$: office = $page.url.searchParams.get("office");
 
 	onMount(async () => {
 		if (!sectionId || !subjectId || !startDate || !endDate) {
@@ -269,10 +272,38 @@
 		});
 
 		// Prepare table body
-		const tableBody = [tableHeaders, dateHeaders];
+		const totalColumns = 3 + dateColumnsToShow.length;
+		const headerRows = [
+			[
+				{ text: 'Office: ' + (office || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: totalColumns, margin: [0, 5, 0, 5] },
+				...Array(totalColumns - 1).fill({}),
+			],
+			[
+				{}, // Empty cell for No. column
+				{ text: 'Subject:', style: 'infoLabel', alignment: 'left', margin:[0,5,0,5] },
+				{ text: subject.name || 'N/A', style: 'infoValue', alignment: 'left', margin: [0, 5, 0, 5] },
+				{ text: 'Class Schedule:', style: 'infoLabel', alignment: 'left', margin: [0, 5, 0, 5] },
+				{ text: scheduleTime, style: 'infoValue', alignment: 'left', colSpan: totalColumns - 4, margin: [0, 5, 0, 5] },
+				...Array(totalColumns - 5).fill({}),
+			],
+			[
+				{ text: 'Course Code:', style: 'infoLabel', alignment: 'left', margin: [0, 5, 0, 5] },
+				{ text: subject.code || 'N/A', style: 'infoValue', alignment: 'left', margin: [0, 5, 0, 5] },
+				{ text: 'Room No.:', style: 'infoLabel', alignment: 'left', margin: [0, 5, 0, 5] },
+				{ text: roomName || 'N/A', style: 'infoValue', alignment: 'left', colSpan: totalColumns - 3, margin: [0, 5, 0, 5] },
+				...Array(totalColumns - 4).fill({}),
+			],
+		];
+		const tableBody = headerRows.concat([tableHeaders, dateHeaders]);
+
+		// Filter students to only include those with valid attendance (P, A, L) and no blank statuses
+		const validStudents = students.filter(studentData => {
+			const attendance = studentData.attendance;
+			return Object.values(attendance).every(record => !record || ['P', 'A', 'L'].includes(record.displayStatus));
+		});
 
 		// Add student rows
-		students.forEach((studentData, index) => {
+		validStudents.forEach((studentData, index) => {
 			const student = studentData.student;
 			const attendance = studentData.attendance;
 
@@ -293,7 +324,7 @@
 					margin: [2, 5, 2, 5],
 				},
 				{
-					text: subject.code || "TN401",
+					text: section.name || "BSIT 1A",
 					alignment: "left",
 					fontSize: 9,
 					margin: [2, 5, 2, 5],
@@ -332,7 +363,7 @@
 		// Legal landscape has about 600 points available height after header
 		// Each row is about 20 points, so we can fit about 25-30 rows
 		const totalRows = 25;
-		const remainingRows = Math.max(0, totalRows - students.length);
+		const remainingRows = Math.max(0, totalRows - validStudents.length);
 
 		for (let i = 0; i < remainingRows; i++) {
 			const emptyRow = [
@@ -373,11 +404,6 @@
 			pageMargins: [40, 140, 40, 40],
 
 			header: function (currentPage, pageCount) {
-				// ONLY render header on page 1
-				if (currentPage !== 1) {
-					return { text: "", margin: [0, 0, 0, 0] };
-				}
-
 				return {
 					stack: [
 						{
@@ -528,7 +554,7 @@
 				// Attendance Table
 				{
 					table: {
-						headerRows: 2,
+						headerRows: 0,
 						widths: columnWidths,
 						body: tableBody,
 					},
@@ -585,7 +611,7 @@
 							width: "50%",
 							stack: [
 								{
-									text: "Submitted to: TROADIO M. BARBOSA, MTTE",
+									text: "Submitted to: _____________________",
 									fontSize: 9,
 									alignment: "center",
 									decoration: "underline",
@@ -633,6 +659,24 @@
 				},
 				dateHeader: {
 					fontSize: 8,
+					bold: false,
+					color: "black",
+					alignment: "left",
+				},
+				roomInfo: {
+					fontSize: 10,
+					bold: true,
+					color: "black",
+					alignment: "left",
+				},
+				infoLabel: {
+					fontSize: 9,
+					bold: true,
+					color: "black",
+					alignment: "left",
+				},
+				infoValue: {
+					fontSize: 9,
 					bold: false,
 					color: "black",
 					alignment: "left",
