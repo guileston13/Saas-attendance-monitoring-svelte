@@ -1,167 +1,171 @@
 <script>
-import { browser } from '$app/environment';
-import { onMount } from 'svelte';
-import { invalidateAll } from '$app/navigation';
-import { enhance } from '$app/forms';
+	import { browser } from "$app/environment";
+	import { onMount } from "svelte";
+	import { invalidateAll } from "$app/navigation";
+	import { enhance } from "$app/forms";
 
-export let data;
+	export let data;
 
-$: rooms = data.rooms || [];
-$: isAdmin = data.session?.role === 'Admin';
+	$: rooms = data.rooms || [];
+	$: isAdmin = data.session?.role === "Admin";
 
-let showModal = false;
-let editingRoom = null;
-let loading = false;
-let searchTerm = '';
-let isLoading = true;
-let loadingProgress = 0;
-let loadingText = 'Initializing...';
-let loadingFadeOut = false;
-let pageVisible = false;
-let statsVisible = false;
-let cardsVisible = false;
-let scrollY = 0;
+	let showModal = false;
+	let editingRoom = null;
+	let loading = false;
+	let searchTerm = "";
+	let isLoading = true;
+	let loadingProgress = 0;
+	let loadingText = "Initializing...";
+	let loadingFadeOut = false;
+	let pageVisible = false;
+	let statsVisible = false;
+	let cardsVisible = false;
+	let scrollY = 0;
 
-// Form data
-let formData = {
-	roomName: ''
-};
+	// Form data
+	let formData = {
+		roomName: "",
+	};
 
-onMount(() => {
-	const loadingSteps = [
-		{ progress: 25, text: 'Loading rooms...' },
-		{ progress: 50, text: 'Preparing interface...' },
-		{ progress: 75, text: 'Finishing up...' },
-		{ progress: 100, text: 'Ready!' }
-	];
+	onMount(() => {
+		const loadingSteps = [
+			{ progress: 25, text: "Loading rooms..." },
+			{ progress: 50, text: "Preparing interface..." },
+			{ progress: 75, text: "Finishing up..." },
+			{ progress: 100, text: "Ready!" },
+		];
 
-	function runLoadingStep(index) {
-		if (index < loadingSteps.length) {
-			const step = loadingSteps[index];
-			loadingProgress = step.progress;
-			loadingText = step.text;
-			setTimeout(() => runLoadingStep(index + 1), 300);
-		} else {
-			loadingFadeOut = true;
-			setTimeout(() => {
-				isLoading = false;
+		function runLoadingStep(index) {
+			if (index < loadingSteps.length) {
+				const step = loadingSteps[index];
+				loadingProgress = step.progress;
+				loadingText = step.text;
+				setTimeout(() => runLoadingStep(index + 1), 300);
+			} else {
+				loadingFadeOut = true;
 				setTimeout(() => {
-					pageVisible = true;
+					isLoading = false;
 					setTimeout(() => {
-						statsVisible = true;
+						pageVisible = true;
 						setTimeout(() => {
-							cardsVisible = true;
-						}, 200);
+							statsVisible = true;
+							setTimeout(() => {
+								cardsVisible = true;
+							}, 200);
+						}, 100);
 					}, 100);
-				}, 100);
-			}, 800);
+				}, 800);
+			}
 		}
-	}
 
-	runLoadingStep(0);
+		runLoadingStep(0);
 
-	const handleScroll = () => {
-		scrollY = window.scrollY;
-	};
-
-	if (browser) {
-		window.addEventListener('scroll', handleScroll);
-		return () => window.removeEventListener('scroll', handleScroll);
-	}
-});
-
-// Filter rooms based on search term
-$: filteredRooms = rooms.filter(room => 
-	room.RoomName.toLowerCase().includes(searchTerm.toLowerCase())
-);
-
-$: availableRooms = filteredRooms.filter(room => room.StatusName === 'Available').length;
-$: occupiedRooms = filteredRooms.filter(room => room.StatusName === 'Occupied').length;
-
-function openModal(room = null) {
-	editingRoom = room;
-	if (room) {
-		formData = {
-			roomName: room.RoomName
+		const handleScroll = () => {
+			scrollY = window.scrollY;
 		};
-	} else {
+
+		if (browser) {
+			window.addEventListener("scroll", handleScroll);
+			return () => window.removeEventListener("scroll", handleScroll);
+		}
+	});
+
+	// Filter rooms based on search term
+	$: filteredRooms = rooms.filter((room) =>
+		room.RoomName.toLowerCase().includes(searchTerm.toLowerCase()),
+	);
+
+	$: availableRooms = filteredRooms.filter(
+		(room) => room.StatusName === "Available",
+	).length;
+	$: occupiedRooms = filteredRooms.filter(
+		(room) => room.StatusName === "Occupied",
+	).length;
+
+	function openModal(room = null) {
+		editingRoom = room;
+		if (room) {
+			formData = {
+				roomName: room.RoomName,
+			};
+		} else {
+			formData = {
+				roomName: "",
+			};
+		}
+		showModal = true;
+	}
+
+	function closeModal() {
+		showModal = false;
+		editingRoom = null;
+		resetForm();
+	}
+
+	function resetForm() {
 		formData = {
-			roomName: ''
+			roomName: "",
 		};
 	}
-	showModal = true;
-}
 
-function closeModal() {
-	showModal = false;
-	editingRoom = null;
-	resetForm();
-}
+	async function handleSubmit() {
+		if (!isAdmin) return;
+		loading = true;
 
-function resetForm() {
-	formData = {
-		roomName: ''
-	};
-}
+		try {
+			const method = editingRoom ? "PUT" : "POST";
+			const url = editingRoom
+				? `/api/rooms/${editingRoom.RoomID}`
+				: "/api/rooms";
 
-async function handleSubmit() {
-	if (!isAdmin) return;
-	loading = true;
+			const response = await fetch(url, {
+				method,
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					...formData,
+					...(editingRoom && { roomId: editingRoom.RoomID }),
+				}),
+			});
 
-	try {
-		const method = editingRoom ? 'PUT' : 'POST';
-		const url = editingRoom
-			? `/api/rooms/${editingRoom.RoomID}`
-			: '/api/rooms';
+			const result = await response.json();
 
-		const response = await fetch(url, {
-			method,
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				...formData,
-				...(editingRoom && { roomId: editingRoom.RoomID })
-			})
-		});
-
-		const result = await response.json();
-
-		if (response.ok) {
-			await invalidateAll();
-			closeModal();
-		} else {
-			alert(result.error || 'An error occurred');
+			if (response.ok) {
+				await invalidateAll();
+				closeModal();
+			} else {
+				alert(result.error || "An error occurred");
+			}
+		} catch (error) {
+			console.error("Submit error:", error);
+			alert("An error occurred while saving");
+		} finally {
+			loading = false;
 		}
-	} catch (error) {
-		console.error('Submit error:', error);
-		alert('An error occurred while saving');
-	} finally {
-		loading = false;
 	}
-}
 
-async function handleDelete(roomId) {
-	if (!isAdmin) return;
-	if (!confirm('Are you sure you want to delete this room?')) return;
+	async function handleDelete(roomId) {
+		if (!isAdmin) return;
+		if (!confirm("Are you sure you want to delete this room?")) return;
 
-	try {
-		const response = await fetch(`/api/rooms/${roomId}`, {
-			method: 'DELETE'
-		});
+		try {
+			const response = await fetch(`/api/rooms/${roomId}`, {
+				method: "DELETE",
+			});
 
-		const result = await response.json();
+			const result = await response.json();
 
-		if (response.ok) {
-			await invalidateAll();
-		} else {
-			alert(result.error || 'An error occurred');
+			if (response.ok) {
+				await invalidateAll();
+			} else {
+				alert(result.error || "An error occurred");
+			}
+		} catch (error) {
+			console.error("Delete error:", error);
+			alert("An error occurred while deleting");
 		}
-	} catch (error) {
-		console.error('Delete error:', error);
-		alert('An error occurred while deleting');
 	}
-}
 </script>
 
 <svelte:head>
@@ -179,15 +183,45 @@ async function handleDelete(roomId) {
 		<div class="loading-content">
 			<div class="loading-logo">
 				<div class="logo-pulse"></div>
-				<svg class="logo-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+				<svg
+					class="logo-svg"
+					viewBox="0 0 100 100"
+					xmlns="http://www.w3.org/2000/svg"
+				>
 					<defs>
-						<linearGradient id="gradientLogo" x1="0%" y1="0%" x2="100%" y2="100%">
-							<stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
-							<stop offset="100%" style="stop-color:#A855F7;stop-opacity:1" />
+						<linearGradient
+							id="gradientLogo"
+							x1="0%"
+							y1="0%"
+							x2="100%"
+							y2="100%"
+						>
+							<stop
+								offset="0%"
+								style="stop-color:#3B82F6;stop-opacity:1"
+							/>
+							<stop
+								offset="100%"
+								style="stop-color:#A855F7;stop-opacity:1"
+							/>
 						</linearGradient>
 					</defs>
-					<rect x="20" y="20" width="60" height="60" rx="10" fill="url(#gradientLogo)" />
-					<text x="50" y="65" font-size="40" font-weight="bold" text-anchor="middle" fill="white">🏠</text>
+					<rect
+						x="20"
+						y="20"
+						width="60"
+						height="60"
+						rx="10"
+						fill="url(#gradientLogo)"
+					/>
+					<text
+						x="50"
+						y="65"
+						font-size="40"
+						font-weight="bold"
+						text-anchor="middle"
+						fill="white">🏠</text
+					>
 				</svg>
 			</div>
 
@@ -198,8 +232,14 @@ async function handleDelete(roomId) {
 
 			<div class="loading-progress">
 				<div class="progress-bar">
-					<div class="progress-fill" style="width: {loadingProgress}%"></div>
-					<div class="progress-glow" style="left: {loadingProgress}%"></div>
+					<div
+						class="progress-fill"
+						style="width: {loadingProgress}%"
+					></div>
+					<div
+						class="progress-glow"
+						style="left: {loadingProgress}%"
+					></div>
 				</div>
 				<div class="progress-text">
 					<span class="progress-percentage">{loadingProgress}%</span>
@@ -223,7 +263,10 @@ async function handleDelete(roomId) {
 	</div>
 {/if}
 
-<div class="animated-background" style="transform: translateY({scrollY * 0.3}px);">
+<div
+	class="animated-background"
+	style="transform: translateY({scrollY * 0.3}px);"
+>
 	<div class="dot-pattern"></div>
 	<div class="floating-orb orb-bg-1"></div>
 	<div class="floating-orb orb-bg-2"></div>
@@ -233,7 +276,13 @@ async function handleDelete(roomId) {
 <div class="rooms-page" class:visible={pageVisible}>
 	<div class="page-header" class:visible={pageVisible}>
 		<div class="header-icon-wrapper">
-			<svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<svg
+				class="header-icon"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+			>
 				<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
 				<polyline points="9 22 9 12 15 12 15 22"></polyline>
 			</svg>
@@ -244,7 +293,14 @@ async function handleDelete(roomId) {
 		</div>
 		{#if isAdmin}
 			<button class="btn btn-primary" on:click={() => openModal()}>
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<svg
+					width="20"
+					height="20"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
 					<line x1="12" y1="5" x2="12" y2="19"></line>
 					<line x1="5" y1="12" x2="19" y2="12"></line>
 				</svg>
@@ -257,8 +313,15 @@ async function handleDelete(roomId) {
 		<div class="stat-card stat-card-1">
 			<div class="stat-glow"></div>
 			<div class="stat-icon-wrapper">
-				<svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+				<svg
+					class="stat-icon"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+					></path>
 					<polyline points="9 22 9 12 15 12 15 22"></polyline>
 				</svg>
 			</div>
@@ -270,7 +333,13 @@ async function handleDelete(roomId) {
 		<div class="stat-card stat-card-2">
 			<div class="stat-glow"></div>
 			<div class="stat-icon-wrapper">
-				<svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<svg
+					class="stat-icon"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
 					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
 					<polyline points="22 4 12 14.01 9 11.01"></polyline>
 				</svg>
@@ -283,8 +352,15 @@ async function handleDelete(roomId) {
 		<div class="stat-card stat-card-3">
 			<div class="stat-glow"></div>
 			<div class="stat-icon-wrapper">
-				<svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+				<svg
+					class="stat-icon"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<rect x="3" y="11" width="18" height="11" rx="2" ry="2"
+					></rect>
 					<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
 				</svg>
 			</div>
@@ -296,13 +372,21 @@ async function handleDelete(roomId) {
 		<div class="stat-card stat-card-4">
 			<div class="stat-glow"></div>
 			<div class="stat-icon-wrapper">
-				<svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<svg
+					class="stat-icon"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
 					<circle cx="12" cy="12" r="10"></circle>
 					<polyline points="12 6 12 12 16 14"></polyline>
 				</svg>
 			</div>
 			<div class="stat-content">
-				<div class="stat-number">{Math.round((availableRooms / (rooms.length || 1)) * 100)}%</div>
+				<div class="stat-number">
+					{Math.round((availableRooms / (rooms.length || 1)) * 100)}%
+				</div>
 				<div class="stat-label">Availability Rate</div>
 			</div>
 		</div>
@@ -321,7 +405,7 @@ async function handleDelete(roomId) {
 						bind:value={searchTerm}
 						placeholder="🔍 Search by room name..."
 						class="search-input"
-					>
+					/>
 				</div>
 
 				<div class="rooms-grid">
@@ -331,8 +415,12 @@ async function handleDelete(roomId) {
 							<div class="card-header-mini">
 								<div class="card-title-section">
 									<h3>{room.RoomName}</h3>
-									<span class="status-badge {room.StatusName.toLowerCase()}">
-										{room.StatusName}
+									<span
+										class="status-badge {(
+											room.StatusName || 'unknown'
+										).toLowerCase()}"
+									>
+										{room.StatusName || "Unknown"}
 									</span>
 								</div>
 							</div>
@@ -348,23 +436,45 @@ async function handleDelete(roomId) {
 							</div>
 							{#if isAdmin}
 								<div class="card-actions">
-									<button 
+									<button
 										class="btn btn-secondary"
 										on:click={() => openModal(room)}
 									>
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-											<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+										<svg
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path
+												d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+											></path>
+											<path
+												d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+											></path>
 										</svg>
 										Edit
 									</button>
-									<button 
+									<button
 										class="btn btn-danger"
-										on:click={() => handleDelete(room.RoomID)}
+										on:click={() =>
+											handleDelete(room.RoomID)}
 									>
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<polyline points="3 6 5 6 21 6"></polyline>
-											<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+										<svg
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<polyline points="3 6 5 6 21 6"
+											></polyline>
+											<path
+												d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+											></path>
 										</svg>
 										Delete
 									</button>
@@ -374,7 +484,11 @@ async function handleDelete(roomId) {
 					{:else}
 						<div class="empty-state">
 							<h3>No rooms found</h3>
-							<p>{searchTerm ? 'Try adjusting your search terms' : 'No room records available'}</p>
+							<p>
+								{searchTerm
+									? "Try adjusting your search terms"
+									: "No room records available"}
+							</p>
 						</div>
 					{/each}
 				</div>
@@ -384,47 +498,55 @@ async function handleDelete(roomId) {
 </div>
 
 {#if showModal}
-	<div 
-		class="modal-overlay" 
+	<div
+		class="modal-overlay"
 		on:click={closeModal}
-		on:keydown={(e) => e.key === 'Escape' && closeModal()}
+		on:keydown={(e) => e.key === "Escape" && closeModal()}
 		role="button"
 		tabindex="0"
 		aria-label="Close modal"
 	>
-		<div 
-			class="modal-content" 
+		<div
+			class="modal-content"
 			on:click|stopPropagation
 			role="document"
 			tabindex="-1"
 		>
 			<div class="modal-header">
-				<h3>{editingRoom ? 'Edit Room' : 'Create New Room'}</h3>
+				<h3>{editingRoom ? "Edit Room" : "Create New Room"}</h3>
 				<button class="close-btn" on:click={closeModal}>&times;</button>
 			</div>
-			
+
 			<form on:submit|preventDefault={handleSubmit}>
 				<div class="form-group">
 					<label for="roomName">Room Name:</label>
-					<input 
-						type="text" 
-						id="roomName" 
+					<input
+						type="text"
+						id="roomName"
 						bind:value={formData.roomName}
-						required 
+						required
 						placeholder="e.g., Room 101"
 					/>
 				</div>
-				
+
 				<div class="modal-actions">
-					<button type="button" class="btn btn-secondary" on:click={closeModal}>
+					<button
+						type="button"
+						class="btn btn-secondary"
+						on:click={closeModal}
+					>
 						Cancel
 					</button>
-					<button type="submit" class="btn btn-primary" disabled={loading}>
+					<button
+						type="submit"
+						class="btn btn-primary"
+						disabled={loading}
+					>
 						{#if loading}
 							<span class="spinner"></span>
 							Saving...
 						{:else}
-							{editingRoom ? 'Update Room' : 'Create Room'}
+							{editingRoom ? "Update Room" : "Create Room"}
 						{/if}
 					</button>
 				</div>
@@ -472,19 +594,54 @@ async function handleDelete(roomId) {
 		position: absolute;
 		width: 6px;
 		height: 6px;
-		background: radial-gradient(circle, rgba(59, 130, 246, 0.6), rgba(59, 130, 246, 0.2));
+		background: radial-gradient(
+			circle,
+			rgba(59, 130, 246, 0.6),
+			rgba(59, 130, 246, 0.2)
+		);
 		border-radius: 50%;
 		animation: particleFloat 4s ease-in-out infinite;
 	}
 
-	.particle-1 { width: 4px; height: 4px; animation-delay: 0s; left: 10%; top: 20%; }
-	.particle-2 { width: 6px; height: 6px; animation-delay: 1s; left: 80%; top: 60%; }
-	.particle-3 { width: 5px; height: 5px; animation-delay: 2s; left: 30%; top: 70%; }
-	.particle-4 { width: 7px; height: 7px; animation-delay: 3s; left: 60%; top: 10%; }
+	.particle-1 {
+		width: 4px;
+		height: 4px;
+		animation-delay: 0s;
+		left: 10%;
+		top: 20%;
+	}
+	.particle-2 {
+		width: 6px;
+		height: 6px;
+		animation-delay: 1s;
+		left: 80%;
+		top: 60%;
+	}
+	.particle-3 {
+		width: 5px;
+		height: 5px;
+		animation-delay: 2s;
+		left: 30%;
+		top: 70%;
+	}
+	.particle-4 {
+		width: 7px;
+		height: 7px;
+		animation-delay: 3s;
+		left: 60%;
+		top: 10%;
+	}
 
 	@keyframes particleFloat {
-		0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0; }
-		50% { transform: translateY(-20px) translateX(10px); opacity: 0.6; }
+		0%,
+		100% {
+			transform: translateY(0px) translateX(0px);
+			opacity: 0;
+		}
+		50% {
+			transform: translateY(-20px) translateX(10px);
+			opacity: 0.6;
+		}
 	}
 
 	.loading-content {
@@ -504,7 +661,11 @@ async function handleDelete(roomId) {
 		position: absolute;
 		inset: 0;
 		border-radius: 20px;
-		background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(168, 85, 247, 0.3));
+		background: linear-gradient(
+			135deg,
+			rgba(59, 130, 246, 0.3),
+			rgba(168, 85, 247, 0.3)
+		);
 		animation: pulse-scale 2s ease-in-out infinite;
 	}
 
@@ -516,8 +677,15 @@ async function handleDelete(roomId) {
 	}
 
 	@keyframes pulse-scale {
-		0%, 100% { transform: scale(1); opacity: 0.5; }
-		50% { transform: scale(1.1); opacity: 1; }
+		0%,
+		100% {
+			transform: scale(1);
+			opacity: 0.5;
+		}
+		50% {
+			transform: scale(1.1);
+			opacity: 1;
+		}
 	}
 
 	.loading-brand {
@@ -527,7 +695,7 @@ async function handleDelete(roomId) {
 	.brand-main {
 		font-size: 28px;
 		font-weight: 700;
-		background: linear-gradient(135deg, #3B82F6, #A855F7);
+		background: linear-gradient(135deg, #3b82f6, #a855f7);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
@@ -559,7 +727,7 @@ async function handleDelete(roomId) {
 
 	.progress-fill {
 		height: 100%;
-		background: linear-gradient(90deg, #3B82F6, #A855F7);
+		background: linear-gradient(90deg, #3b82f6, #a855f7);
 		border-radius: 10px;
 		transition: width 0.3s ease-out;
 	}
@@ -569,14 +737,24 @@ async function handleDelete(roomId) {
 		top: 0;
 		height: 100%;
 		width: 30px;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+		background: linear-gradient(
+			90deg,
+			transparent,
+			rgba(255, 255, 255, 0.8),
+			transparent
+		);
 		filter: blur(8px);
 		animation: glow-shift 1.5s ease-in-out infinite;
 	}
 
 	@keyframes glow-shift {
-		0%, 100% { opacity: 0; }
-		50% { opacity: 1; }
+		0%,
+		100% {
+			opacity: 0;
+		}
+		50% {
+			opacity: 1;
+		}
 	}
 
 	.progress-text {
@@ -606,13 +784,26 @@ async function handleDelete(roomId) {
 		animation: dot-bounce 1s ease-in-out infinite;
 	}
 
-	.dot-1 { animation-delay: 0s; }
-	.dot-2 { animation-delay: 0.15s; }
-	.dot-3 { animation-delay: 0.3s; }
+	.dot-1 {
+		animation-delay: 0s;
+	}
+	.dot-2 {
+		animation-delay: 0.15s;
+	}
+	.dot-3 {
+		animation-delay: 0.3s;
+	}
 
 	@keyframes dot-bounce {
-		0%, 100% { transform: translateY(0); opacity: 0.5; }
-		50% { transform: translateY(-8px); opacity: 1; }
+		0%,
+		100% {
+			transform: translateY(0);
+			opacity: 0.5;
+		}
+		50% {
+			transform: translateY(-8px);
+			opacity: 1;
+		}
 	}
 
 	.loading-orbs {
@@ -630,10 +821,34 @@ async function handleDelete(roomId) {
 		opacity: 0.1;
 	}
 
-	.orb-1 { width: 150px; height: 150px; background: #3B82F6; top: 20%; left: 10%; }
-	.orb-2 { width: 200px; height: 200px; background: #A855F7; bottom: 20%; right: 10%; }
-	.orb-3 { width: 120px; height: 120px; background: #22C55E; top: 50%; left: 50%; }
-	.orb-4 { width: 180px; height: 180px; background: #F97316; bottom: 30%; left: 20%; }
+	.orb-1 {
+		width: 150px;
+		height: 150px;
+		background: #3b82f6;
+		top: 20%;
+		left: 10%;
+	}
+	.orb-2 {
+		width: 200px;
+		height: 200px;
+		background: #a855f7;
+		bottom: 20%;
+		right: 10%;
+	}
+	.orb-3 {
+		width: 120px;
+		height: 120px;
+		background: #22c55e;
+		top: 50%;
+		left: 50%;
+	}
+	.orb-4 {
+		width: 180px;
+		height: 180px;
+		background: #f97316;
+		bottom: 30%;
+		left: 20%;
+	}
 
 	/* ===== ANIMATED BACKGROUND ===== */
 	.animated-background {
@@ -664,7 +879,7 @@ async function handleDelete(roomId) {
 	.orb-bg-1 {
 		width: 400px;
 		height: 400px;
-		background: linear-gradient(135deg, #3B82F6, #60A5FA);
+		background: linear-gradient(135deg, #3b82f6, #60a5fa);
 		top: 10%;
 		left: 10%;
 		animation: float-8s 8s ease-in-out infinite;
@@ -673,7 +888,7 @@ async function handleDelete(roomId) {
 	.orb-bg-2 {
 		width: 500px;
 		height: 500px;
-		background: linear-gradient(135deg, #A855F7, #D8B4FE);
+		background: linear-gradient(135deg, #a855f7, #d8b4fe);
 		bottom: 5%;
 		right: 5%;
 		animation: float-10s-reverse 10s ease-in-out infinite;
@@ -682,30 +897,55 @@ async function handleDelete(roomId) {
 	.orb-bg-3 {
 		width: 350px;
 		height: 350px;
-		background: linear-gradient(135deg, #22C55E, #86EFAC);
+		background: linear-gradient(135deg, #22c55e, #86efac);
 		top: 50%;
 		right: 10%;
 		animation: float-12s 12s ease-in-out infinite;
 	}
 
 	@keyframes float-8s {
-		0%, 100% { transform: translate(0, 0); }
-		25% { transform: translate(30px, -30px); }
-		50% { transform: translate(0, -40px); }
-		75% { transform: translate(-30px, -20px); }
+		0%,
+		100% {
+			transform: translate(0, 0);
+		}
+		25% {
+			transform: translate(30px, -30px);
+		}
+		50% {
+			transform: translate(0, -40px);
+		}
+		75% {
+			transform: translate(-30px, -20px);
+		}
 	}
 
 	@keyframes float-10s-reverse {
-		0%, 100% { transform: translate(0, 0); }
-		25% { transform: translate(-30px, 30px); }
-		50% { transform: translate(0, 40px); }
-		75% { transform: translate(30px, 20px); }
+		0%,
+		100% {
+			transform: translate(0, 0);
+		}
+		25% {
+			transform: translate(-30px, 30px);
+		}
+		50% {
+			transform: translate(0, 40px);
+		}
+		75% {
+			transform: translate(30px, 20px);
+		}
 	}
 
 	@keyframes float-12s {
-		0%, 100% { transform: translate(0, 0); }
-		33% { transform: translate(20px, -40px); }
-		66% { transform: translate(-20px, 20px); }
+		0%,
+		100% {
+			transform: translate(0, 0);
+		}
+		33% {
+			transform: translate(20px, -40px);
+		}
+		66% {
+			transform: translate(-20px, 20px);
+		}
 	}
 
 	/* ===== PAGE STRUCTURE ===== */
@@ -748,13 +988,18 @@ async function handleDelete(roomId) {
 	}
 
 	.page-header::before {
-		content: '';
+		content: "";
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
 		height: 1px;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+		background: linear-gradient(
+			90deg,
+			transparent,
+			rgba(255, 255, 255, 0.8),
+			transparent
+		);
 	}
 
 	.header-icon-wrapper {
@@ -763,7 +1008,7 @@ async function handleDelete(roomId) {
 		justify-content: center;
 		width: 80px;
 		height: 80px;
-		background: linear-gradient(135deg, #3B82F6, #A855F7);
+		background: linear-gradient(135deg, #3b82f6, #a855f7);
 		border-radius: 16px;
 		flex-shrink: 0;
 		animation: pulse-slow 3s ease-in-out infinite;
@@ -776,8 +1021,13 @@ async function handleDelete(roomId) {
 	}
 
 	@keyframes pulse-slow {
-		0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-		50% { box-shadow: 0 0 0 20px rgba(59, 130, 246, 0); }
+		0%,
+		100% {
+			box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+		}
+		50% {
+			box-shadow: 0 0 0 20px rgba(59, 130, 246, 0);
+		}
 	}
 
 	.header-content {
@@ -788,7 +1038,7 @@ async function handleDelete(roomId) {
 		font-size: 32px;
 		font-weight: 700;
 		margin: 0 0 8px 0;
-		background: linear-gradient(135deg, #1e293b, #3B82F6);
+		background: linear-gradient(135deg, #1e293b, #3b82f6);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
@@ -828,10 +1078,18 @@ async function handleDelete(roomId) {
 		animation: cascadeIn 0.5s ease-out forwards;
 	}
 
-	.stat-card-1 { animation-delay: 0.1s; }
-	.stat-card-2 { animation-delay: 0.2s; }
-	.stat-card-3 { animation-delay: 0.3s; }
-	.stat-card-4 { animation-delay: 0.4s; }
+	.stat-card-1 {
+		animation-delay: 0.1s;
+	}
+	.stat-card-2 {
+		animation-delay: 0.2s;
+	}
+	.stat-card-3 {
+		animation-delay: 0.3s;
+	}
+	.stat-card-4 {
+		animation-delay: 0.4s;
+	}
 
 	@keyframes cascadeIn {
 		from {
@@ -845,13 +1103,18 @@ async function handleDelete(roomId) {
 	}
 
 	.stat-card::before {
-		content: '';
+		content: "";
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
 		height: 2px;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+		background: linear-gradient(
+			90deg,
+			transparent,
+			rgba(255, 255, 255, 0.8),
+			transparent
+		);
 	}
 
 	.stat-card:hover {
@@ -862,14 +1125,23 @@ async function handleDelete(roomId) {
 	.stat-glow {
 		position: absolute;
 		inset: -50%;
-		background: radial-gradient(circle, rgba(59, 130, 246, 0.2), transparent);
+		background: radial-gradient(
+			circle,
+			rgba(59, 130, 246, 0.2),
+			transparent
+		);
 		animation: glowPulse 3s ease-in-out infinite;
 		pointer-events: none;
 	}
 
 	@keyframes glowPulse {
-		0%, 100% { opacity: 0.5; }
-		50% { opacity: 1; }
+		0%,
+		100% {
+			opacity: 0.5;
+		}
+		50% {
+			opacity: 1;
+		}
 	}
 
 	.stat-icon-wrapper {
@@ -878,21 +1150,21 @@ async function handleDelete(roomId) {
 		justify-content: center;
 		width: 60px;
 		height: 60px;
-		background: linear-gradient(135deg, #3B82F6, #60A5FA);
+		background: linear-gradient(135deg, #3b82f6, #60a5fa);
 		border-radius: 12px;
 		margin-bottom: 16px;
 	}
 
 	.stat-card-2 .stat-icon-wrapper {
-		background: linear-gradient(135deg, #22C55E, #86EFAC);
+		background: linear-gradient(135deg, #22c55e, #86efac);
 	}
 
 	.stat-card-3 .stat-icon-wrapper {
-		background: linear-gradient(135deg, #F97316, #FBBD23);
+		background: linear-gradient(135deg, #f97316, #fbbd23);
 	}
 
 	.stat-card-4 .stat-icon-wrapper {
-		background: linear-gradient(135deg, #A855F7, #D8B4FE);
+		background: linear-gradient(135deg, #a855f7, #d8b4fe);
 	}
 
 	.stat-icon {
@@ -943,13 +1215,13 @@ async function handleDelete(roomId) {
 	}
 
 	.section-card::before {
-		content: '';
+		content: "";
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
 		height: 3px;
-		background: linear-gradient(90deg, #3B82F6, #A855F7, #22C55E);
+		background: linear-gradient(90deg, #3b82f6, #a855f7, #22c55e);
 	}
 
 	.card-header {
@@ -1016,13 +1288,18 @@ async function handleDelete(roomId) {
 	}
 
 	.room-card-item::before {
-		content: '';
+		content: "";
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
 		height: 2px;
-		background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.6), transparent);
+		background: linear-gradient(
+			90deg,
+			transparent,
+			rgba(59, 130, 246, 0.6),
+			transparent
+		);
 	}
 
 	.room-card-item:hover {
@@ -1035,7 +1312,11 @@ async function handleDelete(roomId) {
 	.card-glow {
 		position: absolute;
 		inset: 0;
-		background: radial-gradient(circle at center, rgba(59, 130, 246, 0.1), transparent);
+		background: radial-gradient(
+			circle at center,
+			rgba(59, 130, 246, 0.1),
+			transparent
+		);
 		opacity: 0;
 		transition: opacity 0.3s ease-out;
 	}
@@ -1125,7 +1406,7 @@ async function handleDelete(roomId) {
 	}
 
 	.btn-primary {
-		background: linear-gradient(135deg, #3B82F6, #2563eb);
+		background: linear-gradient(135deg, #3b82f6, #2563eb);
 		color: white;
 		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 	}
@@ -1153,7 +1434,7 @@ async function handleDelete(roomId) {
 	}
 
 	.btn-danger {
-		background: linear-gradient(135deg, #EF4444, #DC2626);
+		background: linear-gradient(135deg, #ef4444, #dc2626);
 		color: white;
 		box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 	}
@@ -1179,7 +1460,9 @@ async function handleDelete(roomId) {
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	/* ===== MODAL ===== */
@@ -1196,8 +1479,12 @@ async function handleDelete(roomId) {
 	}
 
 	@keyframes fadeIn {
-		from { opacity: 0; }
-		to { opacity: 1; }
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
 	}
 
 	.modal-content {

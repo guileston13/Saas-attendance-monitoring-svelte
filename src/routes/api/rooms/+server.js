@@ -15,9 +15,10 @@ export async function GET({ request }) {
 
 	try {
 		const rooms = await executeQuery(`
-			SELECT RoomID, RoomName
-			FROM room
-			ORDER BY RoomName
+			SELECT r.*, s.StatusName
+			FROM room r
+			LEFT JOIN status s ON r.StatusID = s.StatusID
+			ORDER BY r.RoomName
 		`);
 
 		return new Response(JSON.stringify({ rooms }), {
@@ -54,8 +55,9 @@ export async function POST({ request }) {
 			});
 		}
 
+		// Default StatusID to 1 (Available) if not provided (assuming 1 is Available)
 		const result = await executeQuery(
-			'INSERT INTO room (RoomName) VALUES (?)',
+			'INSERT INTO room (RoomName, StatusID) VALUES (?, 1)',
 			[roomName]
 		);
 

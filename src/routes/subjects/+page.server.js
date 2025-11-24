@@ -7,27 +7,25 @@ import { executeQuery } from '../../services/database.js';
 /** @type {import('./$types').PageServerLoad} */
 export async function load({ request }) {
     const session = getSessionFromCookies(request.headers.get('cookie'));
-    
+
     if (!isAuthenticated(session)) {
         throw redirect(302, '/login');
     }
-    
+
     if (!hasRole(session, ['Admin', 'Teacher'])) {
         throw redirect(302, '/dashboard');
     }
-    
+
     try {
-        const [subjects, statusList, rooms] = await Promise.all([
+        const [subjects, statusList] = await Promise.all([
             getAllSubjects(),
-            executeQuery('SELECT * FROM status ORDER BY StatusName'),
-            executeQuery('SELECT RoomID, RoomName FROM room ORDER BY RoomName')
+            executeQuery('SELECT * FROM status ORDER BY StatusName')
         ]);
-        
+
         return {
             session,
             subjects,
-            statusList,
-            rooms
+            statusList
         };
     } catch (error) {
         console.error('Load subjects error:', error);
@@ -35,7 +33,6 @@ export async function load({ request }) {
             session,
             subjects: [],
             statusList: [],
-            rooms: [],
             error: 'Failed to load subjects data'
         };
     }

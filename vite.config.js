@@ -10,7 +10,10 @@ export default defineConfig({
   server: {
     host: true,  // listen on all interfaces
     port: 4173,
-    https: {},
+    https: {
+      key: fs.readFileSync('./localhost+1-key.pem'),
+      cert: fs.readFileSync('./localhost+1.pem')
+    },
     allowedHosts: [
       'localhost',
       'desktop-r98pm6a.local',

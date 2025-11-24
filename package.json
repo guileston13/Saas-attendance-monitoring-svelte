@@ -24,6 +24,7 @@
     "html5-qrcode": "^2.3.8",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.6.0",
-    "mysql2": "^3.6.0"
+    "mysql2": "^3.6.0",
+    "pdfmake": "^0.2.20"
   }
 }

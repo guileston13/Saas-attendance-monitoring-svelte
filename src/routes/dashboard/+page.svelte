@@ -320,7 +320,7 @@
 						{#each sections as section}
 							<tr>
 								<td>{section.SectionName}</td>
-								<td>{section.StudentCount || 0}</td>
+								<td>{section.TotalStudents || 0}</td>
 								<td>
 									<a href="/sections/{section.SectionID}" class="btn btn-secondary">
 										View Details
@@ -362,7 +362,7 @@
 						{#each sections as section}
 							<tr>
 								<td>{section.SectionName}</td>
-								<td>{section.StudentCount || 0}</td>
+								<td>{section.TotalStudents || 0}</td>
 							</tr>
 						{:else}
 							<tr><td colspan="2" class="text-center">No sections enrolled</td></tr>

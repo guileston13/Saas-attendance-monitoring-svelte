@@ -1,12 +1,66 @@
 // Attendance utility functions and constants
 
 /**
- * Generate calendar days for a given month/year (excluding weekends)
+ * Parse weekday pattern string to day numbers
+ * @param {string} weekdaysPattern - Pattern like 'MW', 'TTh', 'MWF', etc.
+ * @returns {Array<number>} Array of day numbers (0=Sunday, 6=Saturday)
+ */
+export function parseWeekdayPattern(weekdaysPattern) {
+	if (!weekdaysPattern) return [];
+	
+	const dayMap = {
+		'Su': 0, 'M': 1, 'T': 2, 'W': 3, 'Th': 4, 'F': 5, 'S': 6
+	};
+	
+	const days = new Set();
+	let i = 0;
+	
+	while (i < weekdaysPattern.length) {
+		// Check for two-character patterns first (Su, Th)
+		if (i < weekdaysPattern.length - 1) {
+			const twoChar = weekdaysPattern.substring(i, i + 2);
+			if (dayMap[twoChar] !== undefined) {
+				days.add(dayMap[twoChar]);
+				i += 2;
+				continue;
+			}
+		}
+		
+		// Check single character
+		const oneChar = weekdaysPattern.charAt(i);
+		if (dayMap[oneChar] !== undefined) {
+			days.add(dayMap[oneChar]);
+		}
+		i++;
+	}
+	
+	return Array.from(days).sort((a, b) => a - b);
+}
+
+/**
+ * Check if a date matches the weekday pattern
+ * @param {Date|string} date - Date to check
+ * @param {string} weekdaysPattern - Pattern like 'MW', 'TTh', 'MWF'
+ * @returns {boolean} True if date matches pattern
+ */
+export function matchesWeekdayPattern(date, weekdaysPattern) {
+	if (!weekdaysPattern) return false;
+	
+	const dateObj = typeof date === 'string' ? new Date(date) : date;
+	const dayOfWeek = dateObj.getDay();
+	const allowedDays = parseWeekdayPattern(weekdaysPattern);
+	
+	return allowedDays.includes(dayOfWeek);
+}
+
+/**
+ * Generate calendar days filtered by weekday pattern
  * @param {string} year - Year (YYYY)
  * @param {string} month - Month (MM)
+ * @param {string} weekdaysPattern - Optional pattern like 'MW', 'TTh', 'MWF' (if null, excludes weekends only)
  * @returns {Array} Array of day objects
  */
-export function generateSchoolDays(year, month) {
+export function generateSchoolDays(year, month, weekdaysPattern = null) {
 	const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
 	const days = [];
 	
@@ -14,8 +68,17 @@ export function generateSchoolDays(year, month) {
 		const date = new Date(parseInt(year), parseInt(month) - 1, day);
 		const dayOfWeek = date.getDay();
 		
-		// Skip weekends (Sunday = 0, Saturday = 6)
-		if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+		let includeDay = false;
+		
+		if (weekdaysPattern) {
+			// Filter by specific weekday pattern
+			includeDay = matchesWeekdayPattern(date, weekdaysPattern);
+		} else {
+			// Default: exclude weekends only
+			includeDay = dayOfWeek !== 0 && dayOfWeek !== 6;
+		}
+		
+		if (includeDay) {
 			days.push({
 				day: day.toString().padStart(2, '0'),
 				date: `${year}-${month.padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
@@ -26,6 +89,31 @@ export function generateSchoolDays(year, month) {
 	}
 	
 	return days;
+}
+
+/**
+ * Get human-readable description of weekday pattern
+ * @param {string} weekdaysPattern - Pattern like 'MW', 'TTh', 'MWF'
+ * @returns {string} Description like "Monday & Wednesday"
+ */
+export function getWeekdayDescription(weekdaysPattern) {
+	const descriptions = {
+		'M': 'Monday',
+		'T': 'Tuesday',
+		'W': 'Wednesday',
+		'Th': 'Thursday',
+		'F': 'Friday',
+		'S': 'Saturday',
+		'Su': 'Sunday',
+		'MW': 'Monday & Wednesday',
+		'TTh': 'Tuesday & Thursday',
+		'MWF': 'Monday, Wednesday & Friday',
+		'TThS': 'Tuesday, Thursday & Saturday',
+		'MTWThF': 'Monday to Friday',
+		'Daily': 'Every day'
+	};
+	
+	return descriptions[weekdaysPattern] || weekdaysPattern;
 }
 
 /**
@@ -233,6 +321,9 @@ export const MONTH_OPTIONS = [
 
 export default {
 	generateSchoolDays,
+	parseWeekdayPattern,
+	matchesWeekdayPattern,
+	getWeekdayDescription,
 	calculateAttendanceStats,
 	generateMockAttendance,
 	exportToCSV,

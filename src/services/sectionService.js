@@ -22,7 +22,7 @@ export async function getAllSections() {
         GROUP BY s.SectionID, s.SectionName, s.StatusID, st.StatusName, s.CreatedAt
         ORDER BY s.SectionName
     `);
-    
+
     return sections;
 }
 
@@ -36,7 +36,7 @@ export async function getSectionById(sectionId) {
         'SELECT * FROM sections WHERE SectionID = ?',
         [sectionId]
     );
-    
+
     return sections.length > 0 ? sections[0] : null;
 }
 
@@ -50,18 +50,26 @@ export async function getSectionSubjects(sectionId) {
         SELECT 
             ss.SectionID,
             ss.SubjectID,
-            sub.SubjectName,
-            sub.SubjectCode,
+            sub.subject_name,
+            sub.subject_code,
             ss.TeacherID,
             CONCAT(t.FirstName, ' ', t.LastName) as TeacherName,
             COUNT(DISTINCT se.StudentID) as EnrolledStudents,
-            sub.StatusID,
-            stat.StatusName as SubjectStatus,
             ss.CreatedAt as AssignedAt,
-            ss.StartTime as StartTime,
-            ss.EndTime as EndTime,
-            ss.RoomID as RoomID,
-            r.RoomName as RoomName
+            ss.StartTime,
+            ss.EndTime,
+            ss.RoomID,
+            r.RoomName,
+            ss.Monday,
+            ss.Tuesday,
+            ss.Wednesday,
+            ss.Thursday,
+            ss.Friday,
+            ss.MondayStart, ss.MondayEnd, ss.MondayTeacher,
+            ss.TuesdayStart, ss.TuesdayEnd, ss.TuesdayTeacher,
+            ss.WednesdayStart, ss.WednesdayEnd, ss.WednesdayTeacher,
+            ss.ThursdayStart, ss.ThursdayEnd, ss.ThursdayTeacher,
+            ss.FridayStart, ss.FridayEnd, ss.FridayTeacher
         FROM section_subjects ss
         JOIN subjects sub ON ss.SubjectID = sub.SubjectID
         LEFT JOIN teachers t ON ss.TeacherID = t.TeacherID
@@ -71,11 +79,18 @@ export async function getSectionSubjects(sectionId) {
         LEFT JOIN status stat ON sub.StatusID = stat.StatusID
         LEFT JOIN room r ON ss.RoomID = r.RoomID
         WHERE ss.SectionID = ?
-        GROUP BY ss.SectionID, ss.SubjectID, sub.SubjectName, sub.SubjectCode, 
-                 ss.TeacherID, t.FirstName, t.LastName, sub.StatusID, stat.StatusName, ss.CreatedAt, ss.StartTime, ss.EndTime, ss.RoomID, r.RoomName
-        ORDER BY sub.SubjectName
+        GROUP BY ss.SectionID, ss.SubjectID, sub.subject_name, sub.subject_code,
+                 ss.TeacherID, t.FirstName, t.LastName, 
+                 ss.CreatedAt, ss.StartTime, ss.EndTime, ss.RoomID, r.RoomName,
+                 ss.Monday, ss.Tuesday, ss.Wednesday, ss.Thursday, ss.Friday,
+                 ss.MondayStart, ss.MondayEnd, ss.MondayTeacher,
+                 ss.TuesdayStart, ss.TuesdayEnd, ss.TuesdayTeacher,
+                 ss.WednesdayStart, ss.WednesdayEnd, ss.WednesdayTeacher,
+                 ss.ThursdayStart, ss.ThursdayEnd, ss.ThursdayTeacher,
+                 ss.FridayStart, ss.FridayEnd, ss.FridayTeacher
+        ORDER BY sub.subject_name
     `, [sectionId]);
-    
+
     return subjects;
 }
 
@@ -104,7 +119,7 @@ export async function getSubjectEnrollments(sectionId, subjectId) {
         WHERE se.SectionID = ? AND se.SubjectID = ?
         ORDER BY s.LastName, s.FirstName
     `, [sectionId, subjectId]);
-    
+
     return students;
 }
 
@@ -133,7 +148,7 @@ export async function getAvailableStudentsForSubject(sectionId, subjectId) {
         )
         ORDER BY s.LastName, s.FirstName
     `, [sectionId, subjectId]);
-    
+
     return students;
 }
 
@@ -142,14 +157,79 @@ export async function getAvailableStudentsForSubject(sectionId, subjectId) {
  * @param {number} sectionId - Section ID
  * @param {number} subjectId - Subject ID
  * @param {number} teacherId - Teacher ID (optional)
+ * @param {string} startTime - Start time (optional)
+ * @param {string} endTime - End time (optional)
+ * @param {number} monday - Monday flag
+ * @param {number} tuesday - Tuesday flag
+ * @param {number} wednesday - Wednesday flag
+ * @param {number} thursday - Thursday flag
+ * @param {number} friday - Friday flag
+ * @param {Object} schedule - Per-day schedule object { monday: {start, end}, ... }
  * @returns {Promise<Object>} Result
  */
-export async function addSubjectToSection(sectionId, subjectId, teacherId = null) {
+export async function addSubjectToSection(sectionId, subjectId, teacherId = null, startTime = null, endTime = null, monday = 0, tuesday = 0, wednesday = 0, thursday = 0, friday = 0, schedule = {}) {
     const result = await executeQuery(
-        'INSERT INTO section_subjects (SectionID, SubjectID, TeacherID) VALUES (?, ?, ?)',
-        [sectionId, subjectId, teacherId]
+        `INSERT INTO section_subjects (
+            SectionID, SubjectID, TeacherID, StartTime, EndTime, 
+            Monday, Tuesday, Wednesday, Thursday, Friday,
+            MondayStart, MondayEnd, MondayTeacher,
+            TuesdayStart, TuesdayEnd, TuesdayTeacher,
+            WednesdayStart, WednesdayEnd, WednesdayTeacher,
+            ThursdayStart, ThursdayEnd, ThursdayTeacher,
+            FridayStart, FridayEnd, FridayTeacher
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            sectionId, subjectId, teacherId, startTime, endTime,
+            monday, tuesday, wednesday, thursday, friday,
+            schedule.monday?.start || null, schedule.monday?.end || null, schedule.monday?.teacher || null,
+            schedule.tuesday?.start || null, schedule.tuesday?.end || null, schedule.tuesday?.teacher || null,
+            schedule.wednesday?.start || null, schedule.wednesday?.end || null, schedule.wednesday?.teacher || null,
+            schedule.thursday?.start || null, schedule.thursday?.end || null, schedule.thursday?.teacher || null,
+            schedule.friday?.start || null, schedule.friday?.end || null, schedule.friday?.teacher || null
+        ]
     );
-    
+
+    return result;
+}
+
+/**
+ * Update section subject details (teacher and schedule)
+ * @param {number} sectionId - Section ID
+ * @param {number} subjectId - Subject ID
+ * @param {number} teacherId - Teacher ID
+ * @param {string} startTime - Start time
+ * @param {string} endTime - End time
+ * @param {number} monday - Monday flag
+ * @param {number} tuesday - Tuesday flag
+ * @param {number} wednesday - Wednesday flag
+ * @param {number} thursday - Thursday flag
+ * @param {number} friday - Friday flag
+ * @param {Object} schedule - Per-day schedule object
+ * @returns {Promise<Object>} Result
+ */
+export async function updateSectionSubject(sectionId, subjectId, teacherId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, schedule = {}) {
+    const result = await executeQuery(
+        `UPDATE section_subjects SET 
+            TeacherID = ?, StartTime = ?, EndTime = ?, 
+            Monday = ?, Tuesday = ?, Wednesday = ?, Thursday = ?, Friday = ?,
+            MondayStart = ?, MondayEnd = ?, MondayTeacher = ?,
+            TuesdayStart = ?, TuesdayEnd = ?, TuesdayTeacher = ?,
+            WednesdayStart = ?, WednesdayEnd = ?, WednesdayTeacher = ?,
+            ThursdayStart = ?, ThursdayEnd = ?, ThursdayTeacher = ?,
+            FridayStart = ?, FridayEnd = ?, FridayTeacher = ?
+        WHERE SectionID = ? AND SubjectID = ?`,
+        [
+            teacherId, startTime, endTime,
+            monday, tuesday, wednesday, thursday, friday,
+            schedule.monday?.start || null, schedule.monday?.end || null, schedule.monday?.teacher || null,
+            schedule.tuesday?.start || null, schedule.tuesday?.end || null, schedule.tuesday?.teacher || null,
+            schedule.wednesday?.start || null, schedule.wednesday?.end || null, schedule.wednesday?.teacher || null,
+            schedule.thursday?.start || null, schedule.thursday?.end || null, schedule.thursday?.teacher || null,
+            schedule.friday?.start || null, schedule.friday?.end || null, schedule.friday?.teacher || null,
+            sectionId, subjectId
+        ]
+    );
+
     return result;
 }
 
@@ -164,7 +244,7 @@ export async function removeSubjectFromSection(sectionId, subjectId) {
         'DELETE FROM section_subjects WHERE SectionID = ? AND SubjectID = ?',
         [sectionId, subjectId]
     );
-    
+
     return result;
 }
 
@@ -180,7 +260,7 @@ export async function enrollStudentInSubject(sectionId, subjectId, studentId) {
         INSERT INTO subject_enrollments (SectionID, SubjectID, StudentID, Status) 
         VALUES (?, ?, ?, 'Active')
     `, [sectionId, subjectId, studentId]);
-    
+
     return result;
 }
 
@@ -196,7 +276,7 @@ export async function unenrollStudentFromSubject(sectionId, subjectId, studentId
         'DELETE FROM subject_enrollments WHERE SectionID = ? AND SubjectID = ? AND StudentID = ?',
         [sectionId, subjectId, studentId]
     );
-    
+
     return result;
 }
 
@@ -212,7 +292,7 @@ export async function updateSubjectTeacher(sectionId, subjectId, teacherId) {
         'UPDATE section_subjects SET TeacherID = ? WHERE SectionID = ? AND SubjectID = ?',
         [teacherId, sectionId, subjectId]
     );
-    
+
     return result;
 }
 
@@ -223,12 +303,12 @@ export async function updateSubjectTeacher(sectionId, subjectId, teacherId) {
  */
 export async function createSection(sectionData) {
     const { sectionName, statusId } = sectionData;
-    
+
     const result = await executeQuery(
         'INSERT INTO sections (SectionName, StatusID) VALUES (?, ?)',
         [sectionName, statusId || 1]
     );
-    
+
     return result;
 }
 
@@ -240,12 +320,12 @@ export async function createSection(sectionData) {
  */
 export async function updateSection(sectionId, sectionData) {
     const { sectionName, statusId } = sectionData;
-    
+
     const result = await executeQuery(
         'UPDATE sections SET SectionName = ?, StatusID = ? WHERE SectionID = ?',
         [sectionName, statusId, sectionId]
     );
-    
+
     return result;
 }
 
@@ -259,7 +339,7 @@ export async function deleteSection(sectionId) {
         'DELETE FROM sections WHERE SectionID = ?',
         [sectionId]
     );
-    
+
     return result;
 }
 
@@ -270,16 +350,16 @@ export async function deleteSection(sectionId) {
  */
 export async function getSectionDetails(sectionId) {
     const sectionSubjects = await getSectionSubjects(sectionId);
-    
+
     // Get total unique students enrolled in any subject in this section
     const totalStudentsResult = await executeQuery(`
         SELECT COUNT(DISTINCT StudentID) as totalStudents
         FROM subject_enrollments 
         WHERE SectionID = ? AND Status = 'Active'
     `, [sectionId]);
-    
+
     const totalStudents = totalStudentsResult[0]?.totalStudents || 0;
-    
+
     return {
         subjects: sectionSubjects,
         totalStudents: parseInt(totalStudents),

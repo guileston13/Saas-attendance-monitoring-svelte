@@ -17,11 +17,12 @@ export async function load({ request }) {
 	}
 
 	try {
-		// Load all rooms (rooms table doesn't have status column)
+		// Load all rooms with status
 		const rooms = await executeQuery(`
-			SELECT RoomID, RoomName
-			FROM room
-			ORDER BY RoomName
+			SELECT r.*, s.StatusName
+			FROM room r
+			LEFT JOIN status s ON r.StatusID = s.StatusID
+			ORDER BY r.RoomName
 		`);
 
 		return {

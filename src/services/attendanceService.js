@@ -125,21 +125,29 @@ export async function getEnrolledStudentsForAttendance(sectionId, subjectId) {
  * @param {number} subjectId - Subject ID
  * @param {number} sectionId - Section ID
  * @param {string} date - Date (YYYY-MM-DD)
- * @param {string} status - Attendance status ('Present' or 'Absent')
+ * @param {string} status - Attendance status ('Present', 'Absent', or 'Late')
  * @param {number} recordedBy - User ID of who recorded this
+ * @param {string} loginTime - Optional login time (HH:MM:SS), defaults to current time for Present/Late
  * @returns {Promise<Object>} Database result
  */
-export async function updateAttendanceRecord(studentId, subjectId, sectionId, date, status, recordedBy) {
+export async function updateAttendanceRecord(studentId, subjectId, sectionId, date, status, recordedBy, loginTime = null) {
+    // If loginTime not provided and status is Present or Late, use current time
+    if (!loginTime && (status === 'Present' || status === 'Late')) {
+        const now = new Date();
+        loginTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
+    }
+    
     const query = `
-        INSERT INTO attendance_records (student_id, subject_id, section_id, attendance_date, status, recorded_by)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO attendance_records (student_id, subject_id, section_id, attendance_date, status, login_time, recorded_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE 
         status = VALUES(status),
+        login_time = VALUES(login_time),
         recorded_by = VALUES(recorded_by),
         recorded_at = CURRENT_TIMESTAMP
     `;
     
-    const params = [studentId, subjectId, sectionId, date, status, recordedBy];
+    const params = [studentId, subjectId, sectionId, date, status, loginTime, recordedBy];
     return await executeQuery(query, params);
 }
 
@@ -216,7 +224,7 @@ export async function generateMonthlyAttendanceRecords(sectionId, subjectId, yea
                 subjectId: subjectId,
                 sectionId: sectionId,
                 date: date,
-                status: 'Absent', // Default to absent
+                status: '-', // Default status (not counted in reports)
                 recordedBy: recordedBy
             });
         });
@@ -321,9 +329,9 @@ export async function getTeacherSections(teacherUserId) {
 export async function getTeacherSubjectsInSection(teacherUserId, sectionId) {
     const query = `
         SELECT DISTINCT
-            sub.SubjectID,
-            sub.SubjectName,
-            sub.SubjectCode,
+            sub.SubjectID as subject_id,
+            sub.subject_name,
+            sub.subject_code,
             ss.StartTime,
             ss.EndTime
         FROM subjects sub
@@ -332,7 +340,7 @@ export async function getTeacherSubjectsInSection(teacherUserId, sectionId) {
         WHERE t.UserID = ? 
         AND ss.SectionID = ?
         AND sub.StatusID = 1
-        ORDER BY sub.SubjectName
+        ORDER BY sub.subject_name
     `;
     
     return await executeQuery(query, [teacherUserId, sectionId]);
@@ -379,4 +387,101 @@ export async function attendanceRecordsExist(sectionId, subjectId, year, month) 
     
     const result = await executeQuery(query, [sectionId, subjectId, startDate, endDate]);
     return result[0].record_count > 0;
+}
+
+/**
+ * Get all subjects assigned to a teacher
+ * @param {number} teacherId - Teacher ID
+ * @returns {Promise<Array>} Array of subjects with section info
+ */
+export async function getTeacherSubjects(teacherId) {
+    const query = `
+        SELECT DISTINCT
+            sec.SectionID,
+            sec.SectionName,
+            sec.Semester,
+            sec.SchoolYear,
+            sub.subject_id,
+            sub.SubjectName,
+            sub.SubjectCode,
+            sch.Weekdays,
+            sch.StartTime,
+            sch.EndTime,
+            r.RoomName,
+            r.Building,
+            COUNT(DISTINCT se.StudentID) as EnrolledStudents
+        FROM section_subjects ss
+        JOIN sections sec ON ss.SectionID = sec.SectionID
+        JOIN course_catalog sub ON ss.SubjectID = sub.subject_id
+        LEFT JOIN subject_schedules sch ON ss.SectionID = sch.SectionID AND ss.SubjectID = sch.SubjectID
+        LEFT JOIN room r ON sch.RoomID = r.RoomID
+        LEFT JOIN subject_enrollments se ON ss.SectionID = se.SectionID 
+            AND ss.SubjectID = se.SubjectID 
+            AND se.Status = 'Active'
+        WHERE ss.TeacherID = ?
+        AND sec.StatusID = 1
+        GROUP BY 
+            sec.SectionID, sec.SectionName, sec.Semester, sec.SchoolYear,
+            sub.subject_id, sub.SubjectName, sub.SubjectCode,
+            sch.Weekdays, sch.StartTime, sch.EndTime,
+            r.RoomName, r.Building
+        ORDER BY sec.SectionName, sub.SubjectName
+    `;
+    
+    return await executeQuery(query, [teacherId]);
+}
+
+/**
+ * Get filtered attendance dates for a subject based on its schedule
+ * @param {number} sectionId - Section ID
+ * @param {number} subjectId - Subject ID
+ * @param {string} year - Year (YYYY)
+ * @param {string} month - Month (MM)
+ * @returns {Promise<Array>} Array of valid attendance dates
+ */
+export async function getSubjectAttendanceDates(sectionId, subjectId, year, month) {
+    const query = `CALL get_subject_attendance_dates(?, ?, ?, ?)`;
+    
+    try {
+        const results = await executeQuery(query, [sectionId, subjectId, year, month]);
+        // Stored procedure returns array of result sets, we want the first one
+        return Array.isArray(results[0]) ? results[0] : results;
+    } catch (error) {
+        console.error('Error getting subject attendance dates:', error);
+        // Fallback: return empty array
+        return [];
+    }
+}
+
+/**
+ * Get subject schedule information
+ * @param {number} sectionId - Section ID
+ * @param {number} subjectId - Subject ID
+ * @returns {Promise<Object|null>} Schedule information
+ */
+export async function getSubjectSchedule(sectionId, subjectId) {
+    const query = `
+        SELECT 
+            sch.ScheduleID,
+            sch.Weekdays,
+            sch.StartTime,
+            sch.EndTime,
+            sch.RoomID,
+            r.RoomName,
+            r.Building,
+            sec.SectionName,
+            sec.Semester,
+            sec.SchoolYear,
+            sub.SubjectName,
+            sub.SubjectCode
+        FROM subject_schedules sch
+        JOIN sections sec ON sch.SectionID = sec.SectionID
+        JOIN course_catalog sub ON sch.SubjectID = sub.subject_id
+        LEFT JOIN room r ON sch.RoomID = r.RoomID
+        WHERE sch.SectionID = ? AND sch.SubjectID = ?
+        LIMIT 1
+    `;
+    
+    const results = await executeQuery(query, [sectionId, subjectId]);
+    return results.length > 0 ? results[0] : null;
 }

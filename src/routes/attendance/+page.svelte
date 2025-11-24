@@ -318,7 +318,7 @@
 		if (!attendanceData[studentId]) return { present: 0, absent: 0, total: 0 };
 		
 		const records = Object.values(attendanceData[studentId]);
-		const present = records.filter(status => status === 'present').length;
+		const present = records.filter(status => status === 'present' || status === 'late').length;
 		const absent = records.filter(status => status === 'absent').length;
 		
 		return { present, absent, total: records.length };
@@ -427,8 +427,10 @@
 						tabindex="0"
 					>
 						<div class="card-icon">📖</div>
-						<h3>{subject.SubjectName}</h3>
-						<p class="card-subtitle">{subject.SubjectCode}</p>
+						<h3>{subject.subject_name}</h3>
+						{#if subject.subject_code}
+							<p class="card-subtitle">{subject.subject_code}</p>
+						{/if}
 						<div class="card-action">
 							<span>View Attendance →</span>
 						</div>
@@ -569,7 +571,13 @@
 													title="Click to toggle attendance for {day.dayName} {day.day} - Current: {status}"
 													disabled={updating}
 												>
-													{status === 'present' ? '✅' : '❌'}
+													{#if status === 'present'}
+														✅
+													{:else if status === 'late'}
+														⏰
+													{:else}
+														❌
+													{/if}
 												</button>
 											</td>
 										{/each}

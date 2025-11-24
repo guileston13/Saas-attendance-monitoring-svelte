@@ -1,5 +1,4 @@
 <script>
-	// Reports page component
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	
@@ -7,283 +6,344 @@
 	export let data;
 	
 	$: session = data.session;
-	$: sections = data.sections || [];
 	
-	let selectedSection = null;
-	let sectionStudents = [];
+	let teachers = [];
+	let selectedTeacher = null;
+	let subjects = [];
+	let selectedSubject = null;
 	let loading = false;
-	let showModal = false;
+	let error = null;
 	
-	// Load jsPDF dynamically when needed
-	let jsPDF = null;
-	let autoTable = null;
+	// Modal states
+	let showSubjectsModal = false;
+	let showDateRangeModal = false;
 	
-	async function loadPDFLibs() {
-		if (typeof window !== 'undefined' && !jsPDF) {
-			try {
-				const jsPDFModule = await import('jspdf');
-				const autoTableModule = await import('jspdf-autotable');
-				jsPDF = jsPDFModule.default;
-				// autoTable is automatically added to jsPDF prototype
-			} catch (error) {
-				console.error('Failed to load PDF libraries:', error);
-				alert('PDF export feature is not available');
-			}
+	// Date range
+	let startDate = '';
+	let endDate = '';
+	
+	onMount(async () => {
+		if (session.role === 'Admin') {
+			await loadTeachers();
+		} else if (session.role === 'Teacher') {
+			// For teachers, directly load their subjects
+			await loadTeacherSubjects(session.teacherId);
+			selectedTeacher = {
+				TeacherID: session.teacherId,
+				FirstName: session.firstName || 'Teacher',
+				LastName: session.lastName || ''
+			};
+			showSubjectsModal = true;
 		}
+		
+		// Set default date range (current month)
+		const today = new Date();
+		const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+		const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+		
+		startDate = formatDate(firstDay);
+		endDate = formatDate(lastDay);
+	});
+	
+	function formatDate(date) {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
 	}
 	
-	async function viewSectionReport(section) {
-		selectedSection = section;
+	async function loadTeachers() {
 		loading = true;
-		showModal = true;
+		error = null;
 		
 		try {
-			const response = await fetch(`/api/sections/${section.SectionID}/students`);
-			const data = await response.json();
+			const response = await fetch('/api/reports/teachers');
+			const result = await response.json();
 			
 			if (response.ok) {
-				sectionStudents = data.students || [];
+				teachers = result.teachers || [];
 			} else {
-				alert('Failed to load section data');
-				closeModal();
+				error = result.error || 'Failed to load teachers';
 			}
-		} catch (error) {
-			console.error('Load section report error:', error);
-			alert('An error occurred while loading section data');
-			closeModal();
+		} catch (err) {
+			console.error('Load teachers error:', err);
+			error = 'An error occurred while loading teachers';
 		} finally {
 			loading = false;
 		}
 	}
 	
-	function closeModal() {
-		showModal = false;
-		selectedSection = null;
-		sectionStudents = [];
+	async function selectTeacher(teacher) {
+		selectedTeacher = teacher;
+		await loadTeacherSubjects(teacher.TeacherID);
+		showSubjectsModal = true;
 	}
 	
-	async function exportToPDF() {
-		if (!browser || !selectedSection || !sectionStudents) return;
+	async function loadTeacherSubjects(teacherId) {
+		loading = true;
+		error = null;
+		subjects = [];
 		
-		await loadPDFLibs();
-		
-		if (!jsPDF) {
-			alert('PDF export is not available');
+		try {
+			const response = await fetch(`/api/teachers/${teacherId}/subjects`);
+			const result = await response.json();
+			
+			if (response.ok) {
+				subjects = result.subjects || [];
+			} else {
+				error = result.error || 'Failed to load subjects';
+			}
+		} catch (err) {
+			console.error('Load subjects error:', err);
+			error = 'An error occurred while loading subjects';
+		} finally {
+			loading = false;
+		}
+	}
+	
+	function selectSubject(subject) {
+		selectedSubject = subject;
+		showSubjectsModal = false;
+		showDateRangeModal = true;
+	}
+	
+	function closeModals() {
+		showSubjectsModal = false;
+		showDateRangeModal = false;
+	}
+	
+	function backToSubjects() {
+		showDateRangeModal = false;
+		showSubjectsModal = true;
+	}
+	
+	async function generateReport() {
+		if (!selectedSubject || !startDate || !endDate) {
+			alert('Please select date range');
 			return;
 		}
 		
-		try {
-			const doc = new jsPDF();
-			
-			// Add title
-			doc.setFontSize(20);
-			doc.setTextColor(44, 62, 80); // Dark blue color
-			doc.text('School Management System', 20, 20);
-			
-			// Add section header
-			doc.setFontSize(16);
-			doc.text(`Section Report: ${selectedSection.SectionName}`, 20, 35);
-			
-			// Add generated date
-			doc.setFontSize(10);
-			doc.setTextColor(127, 140, 141); // Gray color
-			doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 45);
-			
-			// Add summary
-			doc.setFontSize(12);
-			doc.setTextColor(44, 62, 80);
-			doc.text(`Total Students: ${sectionStudents.length}`, 20, 60);
-			
-			// Prepare table data
-			const tableHeaders = ['Student ID', 'Name', 'Year Level', 'Status'];
-			const tableData = sectionStudents.map(student => [
-				student.StudentID,
-				`${student.FirstName} ${student.MiddleName ? student.MiddleName + ' ' : ''}${student.LastName}`,
-				student.YearLevel,
-				student.StatusName
-			]);
-			
-			// Add table using autoTable
-			doc.autoTable({
-				head: [tableHeaders],
-				body: tableData,
-				startY: 70,
-				theme: 'grid',
-				headStyles: {
-					fillColor: [52, 152, 219], // Blue header
-					textColor: 255,
-					fontSize: 11,
-					fontStyle: 'bold'
-				},
-				bodyStyles: {
-					fontSize: 10,
-					textColor: [44, 62, 80]
-				},
-				alternateRowStyles: {
-					fillColor: [248, 249, 250] // Light gray for alternate rows
-				},
-				columnStyles: {
-					0: { cellWidth: 30 }, // Student ID
-					1: { cellWidth: 60 }, // Name
-					2: { cellWidth: 30 }, // Year Level
-					3: { cellWidth: 30 }  // Status
-				}
-			});
-			
-			// Add footer
-			const pageCount = doc.internal.getNumberOfPages();
-			for (let i = 1; i <= pageCount; i++) {
-				doc.setPage(i);
-				doc.setFontSize(8);
-				doc.setTextColor(127, 140, 141);
-				doc.text(
-					`Page ${i} of ${pageCount}`,
-					doc.internal.pageSize.width - 30,
-					doc.internal.pageSize.height - 10
-				);
-			}
-			
-			// Save the PDF
-			const fileName = `${selectedSection.SectionName.replace(/[^a-zA-Z0-9]/g, '_')}_Report.pdf`;
-			doc.save(fileName);
-			
-		} catch (error) {
-			console.error('PDF export error:', error);
-			alert('An error occurred while generating the PDF');
+		if (new Date(startDate) > new Date(endDate)) {
+			alert('Start date must be before end date');
+			return;
 		}
+		
+		// Prepare report parameters
+		const reportParams = {
+			sectionId: selectedSubject.SectionID,
+			subjectId: selectedSubject.SubjectID,
+			startDate,
+			endDate,
+			teacherId: selectedTeacher.TeacherID
+		};
+		
+		// Encode parameters for URL
+		const queryString = new URLSearchParams(reportParams).toString();
+		
+		// Open report in new tab
+		window.open(`/reports/view?${queryString}`, '_blank');
+		
+		// Close modal
+		closeModals();
 	}
 </script>
 
 <svelte:head>
-	<title>Reports - School Management System</title>
+	<title>Attendance Reports - School Management System</title>
 </svelte:head>
 
 <div class="page">
 	<div class="page-header">
-		<h1>Section Reports</h1>
+		<h1>📊 Attendance Reports</h1>
+		<p class="subtitle">Generate and view attendance reports by teacher and subject</p>
 	</div>
 	
-	{#if data.error}
-		<div class="error-message mb-2">{data.error}</div>
+	{#if error}
+		<div class="error-message">{error}</div>
 	{/if}
 	
-	<div class="card">
-		<div class="card-header">
-			<h3 class="card-title">Available Sections</h3>
-			<p>Click on a section to view its student report</p>
-		</div>
-		
-		<div class="sections-grid">
-			{#each sections as section}
-				<div 
-					class="section-card" 
-					on:click={() => viewSectionReport(section)}
-					on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && viewSectionReport(section)}
-					role="button"
-					tabindex="0"
-				>
-					<h4>{section.SectionName}</h4>
-					<p class="student-count">{section.StudentCount || 0} students enrolled</p>
-					<div class="card-actions">
-						<span class="view-report-btn">View Report →</span>
-					</div>
+	{#if session.role === 'Admin'}
+		<div class="card">
+			<div class="card-header">
+				<h3 class="card-title">Select Teacher</h3>
+				<p>Click on a teacher to view their subjects</p>
+			</div>
+			
+			{#if loading && teachers.length === 0}
+				<div class="loading">
+					<span class="spinner"></span>
+					Loading teachers...
 				</div>
 			{:else}
-				<div class="no-data">
-					<p>No sections available</p>
+				<div class="teachers-grid">
+					{#each teachers as teacher}
+						<div 
+							class="teacher-card" 
+							on:click={() => selectTeacher(teacher)}
+							on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectTeacher(teacher)}
+							role="button"
+							tabindex="0"
+						>
+							<div class="teacher-avatar">
+								<span class="avatar-icon">👤</span>
+							</div>
+							<div class="teacher-info">
+								<h4>
+									{teacher.FirstName} 
+									{teacher.MiddleName ? teacher.MiddleName + ' ' : ''}
+									{teacher.LastName}
+								</h4>
+								<span class="teacher-id">ID: {teacher.TeacherID}</span>
+							</div>
+							<div class="card-arrow">→</div>
+						</div>
+					{:else}
+						<div class="no-data">
+							<p>No teachers found</p>
+						</div>
+					{/each}
 				</div>
-			{/each}
+			{/if}
 		</div>
-	</div>
+	{/if}
 </div>
 
-<!-- Report Modal -->
-{#if showModal}
+<!-- Subjects Modal -->
+{#if showSubjectsModal}
 	<div 
 		class="modal-overlay" 
-		on:click={closeModal}
-		on:keydown={(e) => e.key === 'Escape' && closeModal()}
+		on:click={closeModals}
+		on:keydown={(e) => e.key === 'Escape' && closeModals()}
 		role="button"
 		tabindex="0"
 		aria-label="Close modal"
 	>
 		<div 
-			class="modal-content large-modal" 
+			class="modal-content" 
 			on:click|stopPropagation
 			role="document"
 			tabindex="-1"
 		>
 			<div class="modal-header">
 				<h3 class="modal-title">
-					{selectedSection?.SectionName} - Student Report
+					Select Subject - {selectedTeacher?.FirstName} {selectedTeacher?.LastName}
 				</h3>
-				<button class="close-btn" on:click={closeModal}>&times;</button>
+				<button class="close-btn" on:click={closeModals}>&times;</button>
 			</div>
 			
 			{#if loading}
 				<div class="loading">
 					<span class="spinner"></span>
-					Loading report data...
+					Loading subjects...
 				</div>
 			{:else}
-				<div class="report-content">
-					<div class="report-summary">
-						<div class="summary-item">
-							<span class="label">Section:</span>
-							<span class="value">{selectedSection?.SectionName}</span>
+				<div class="subjects-list">
+					{#each subjects as subject}
+						<div 
+							class="subject-item" 
+							on:click={() => selectSubject(subject)}
+							on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectSubject(subject)}
+							role="button"
+							tabindex="0"
+						>
+							<div class="subject-icon">📚</div>
+							<div class="subject-info">
+								<h4>{subject.subject_name}</h4>
+								<div class="subject-details">
+									{#if subject.subject_code}
+										<span class="badge">{subject.subject_code}</span>
+									{/if}
+									<span class="badge">Section: {subject.SectionName}</span>
+									{#if subject.teaching_days}
+										<span class="badge days-badge">{subject.teaching_days}</span>
+									{/if}
+								</div>
+							</div>
+							<div class="item-arrow">→</div>
 						</div>
-						<div class="summary-item">
-							<span class="label">Total Students:</span>
-							<span class="value">{sectionStudents.length}</span>
+					{:else}
+						<div class="no-data">
+							<p>No subjects assigned to this teacher</p>
 						</div>
-						<div class="summary-item">
-							<span class="label">Generated:</span>
-							<span class="value">{new Date().toLocaleDateString()}</span>
-						</div>
-					</div>
-					
-					<div class="report-actions">
-						<button class="btn btn-primary" on:click={exportToPDF}>
-							📄 Export to PDF
-						</button>
-					</div>
-					
-					<div class="table-container">
-						<table>
-							<thead>
-								<tr>
-									<th>Student ID</th>
-									<th>Name</th>
-									<th>Year Level</th>
-									<th>Status</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each sectionStudents as student}
-									<tr>
-										<td>{student.StudentID}</td>
-										<td>
-											{student.FirstName} 
-											{student.MiddleName ? student.MiddleName + ' ' : ''}
-											{student.LastName}
-										</td>
-										<td>{student.YearLevel}</td>
-										<td>
-											<span class="status-badge status-{student.StatusName?.toLowerCase()}">
-												{student.StatusName}
-											</span>
-										</td>
-									</tr>
-								{:else}
-									<tr>
-										<td colspan="4" class="text-center">No students enrolled</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
+					{/each}
 				</div>
 			{/if}
+		</div>
+	</div>
+{/if}
+
+<!-- Date Range Modal -->
+{#if showDateRangeModal}
+	<div 
+		class="modal-overlay" 
+		on:click={closeModals}
+		on:keydown={(e) => e.key === 'Escape' && closeModals()}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div 
+			class="modal-content date-modal" 
+			on:click|stopPropagation
+			role="document"
+			tabindex="-1"
+		>
+			<div class="modal-header">
+				<button class="back-btn" on:click={backToSubjects}>
+					← Back
+				</button>
+				<h3 class="modal-title">Select Date Range</h3>
+				<button class="close-btn" on:click={closeModals}>&times;</button>
+			</div>
+			
+			<div class="date-range-content">
+				<div class="report-info">
+					<h4>Report Details:</h4>
+					<p><strong>Teacher:</strong> {selectedTeacher?.FirstName} {selectedTeacher?.LastName}</p>
+					<p><strong>Subject:</strong> {selectedSubject?.subject_name} {#if selectedSubject?.subject_code}({selectedSubject.subject_code}){/if}</p>
+					<p><strong>Section:</strong> {selectedSubject?.SectionName}</p>
+					{#if selectedSubject?.teaching_days}
+						<p><strong>Days:</strong> {selectedSubject.teaching_days}</p>
+					{/if}
+				</div>
+				
+				<div class="date-inputs">
+					<div class="form-group">
+						<label for="startDate">Start Date:</label>
+						<input 
+							type="date" 
+							id="startDate" 
+							bind:value={startDate}
+							max={endDate}
+							required
+						/>
+					</div>
+					
+					<div class="form-group">
+						<label for="endDate">End Date:</label>
+						<input 
+							type="date" 
+							id="endDate" 
+							bind:value={endDate}
+							min={startDate}
+							required
+						/>
+					</div>
+				</div>
+				
+				<div class="modal-actions">
+					<button class="btn btn-secondary" on:click={backToSubjects}>
+						Cancel
+					</button>
+					<button 
+						class="btn btn-primary" 
+						on:click={generateReport}
+						disabled={!startDate || !endDate}
+					>
+						📄 Generate Report
+					</button>
+				</div>
+			</div>
 		</div>
 	</div>
 {/if}
@@ -292,6 +352,7 @@
 	.page {
 		max-width: 1200px;
 		margin: 0 auto;
+		padding: 2rem;
 	}
 	
 	.page-header {
@@ -299,142 +360,255 @@
 	}
 	
 	.page-header h1 {
-		margin: 0;
+		margin: 0 0 0.5rem 0;
 		color: #2c3e50;
+		font-size: 2rem;
 	}
 	
-	.sections-grid {
+	.subtitle {
+		color: #7f8c8d;
+		margin: 0;
+	}
+	
+	.teachers-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 		gap: 1rem;
 		margin-top: 1rem;
 	}
 	
-	.section-card {
+	.teacher-card {
 		background: white;
-		border: 1px solid #ecf0f1;
-		border-radius: 8px;
+		border: 2px solid #ecf0f1;
+		border-radius: 12px;
 		padding: 1.5rem;
 		cursor: pointer;
 		transition: all 0.2s;
-		box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+		display: flex;
+		align-items: center;
+		gap: 1rem;
 	}
 	
-	.section-card:hover {
-		box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-		transform: translateY(-2px);
+	.teacher-card:hover {
 		border-color: #3498db;
+		box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
+		transform: translateY(-2px);
 	}
 	
-	.section-card h4 {
-		margin: 0 0 0.5rem 0;
+	.teacher-avatar {
+		width: 60px;
+		height: 60px;
+		border-radius: 50%;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+	
+	.avatar-icon {
+		font-size: 2rem;
+	}
+	
+	.teacher-info {
+		flex: 1;
+	}
+	
+	.teacher-info h4 {
+		margin: 0 0 0.25rem 0;
 		color: #2c3e50;
 		font-size: 1.1rem;
 	}
 	
-	.student-count {
-		color: #7f8c8d;
-		margin: 0 0 1rem 0;
-		font-size: 0.9rem;
+	.teacher-id {
+		color: #95a5a6;
+		font-size: 0.85rem;
 	}
 	
-	.view-report-btn {
+	.card-arrow {
+		font-size: 1.5rem;
 		color: #3498db;
-		font-weight: 600;
-		font-size: 0.9rem;
+		opacity: 0.5;
+		transition: all 0.2s;
 	}
 	
-	.no-data {
-		grid-column: 1 / -1;
-		text-align: center;
-		padding: 2rem;
-		color: #7f8c8d;
+	.teacher-card:hover .card-arrow {
+		opacity: 1;
+		transform: translateX(5px);
 	}
 	
-	.large-modal {
-		max-width: 900px;
-		width: 90%;
+	.subjects-list {
+		max-height: 500px;
+		overflow-y: auto;
 	}
 	
-	.report-content {
-		margin-top: 1rem;
-	}
-	
-	.report-summary {
-		background: #f8f9fa;
-		padding: 1rem;
-		border-radius: 4px;
-		margin-bottom: 1rem;
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	.subject-item {
+		background: white;
+		border: 2px solid #ecf0f1;
+		border-radius: 8px;
+		padding: 1rem 1.5rem;
+		margin-bottom: 0.75rem;
+		cursor: pointer;
+		transition: all 0.2s;
+		display: flex;
+		align-items: center;
 		gap: 1rem;
 	}
 	
-	.summary-item {
+	.subject-item:hover {
+		border-color: #3498db;
+		background: #f8f9fa;
+		transform: translateX(5px);
+	}
+	
+	.subject-icon {
+		font-size: 1.5rem;
+	}
+	
+	.subject-info {
+		flex: 1;
+	}
+	
+	.subject-info h4 {
+		margin: 0 0 0.5rem 0;
+		color: #2c3e50;
+	}
+	
+	.subject-details {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+	
+	.badge {
+		background: #e8f4f8;
+		color: #2980b9;
+		padding: 0.25rem 0.75rem;
+		border-radius: 12px;
+		font-size: 0.85rem;
+		font-weight: 500;
+	}
+	
+	.days-badge {
+		background: #e8f5e9;
+		color: #27ae60;
+	}
+	
+	.item-arrow {
+		font-size: 1.5rem;
+		color: #3498db;
+		opacity: 0.5;
+		transition: all 0.2s;
+	}
+	
+	.subject-item:hover .item-arrow {
+		opacity: 1;
+	}
+	
+	.date-modal {
+		max-width: 550px;
+	}
+	
+	.date-range-content {
+		padding: 1rem 0;
+	}
+	
+	.report-info {
+		background: #f8f9fa;
+		padding: 1rem;
+		border-radius: 8px;
+		margin-bottom: 1.5rem;
+	}
+	
+	.report-info h4 {
+		margin: 0 0 0.75rem 0;
+		color: #2c3e50;
+	}
+	
+	.report-info p {
+		margin: 0.5rem 0;
+		color: #34495e;
+	}
+	
+	.date-inputs {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+		margin-bottom: 1.5rem;
+	}
+	
+	.form-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
 	}
 	
-	.summary-item .label {
+	.form-group label {
 		font-weight: 600;
-		color: #7f8c8d;
-		font-size: 0.9rem;
-	}
-	
-	.summary-item .value {
 		color: #2c3e50;
+		margin-bottom: 0.5rem;
+	}
+	
+	.form-group input[type="date"] {
+		padding: 0.75rem;
+		border: 2px solid #ecf0f1;
+		border-radius: 8px;
 		font-size: 1rem;
+		transition: border-color 0.2s;
 	}
 	
-	.report-actions {
-		margin-bottom: 1rem;
-		text-align: right;
+	.form-group input[type="date"]:focus {
+		outline: none;
+		border-color: #3498db;
 	}
 	
-	.status-badge {
-		padding: 0.25rem 0.5rem;
-		border-radius: 12px;
-		font-size: 0.8rem;
-		font-weight: 600;
-		text-transform: uppercase;
+	.modal-actions {
+		display: flex;
+		gap: 1rem;
+		justify-content: flex-end;
+		padding-top: 1rem;
+		border-top: 1px solid #ecf0f1;
 	}
 	
-	.status-active {
-		background: #d4edda;
-		color: #155724;
+	.back-btn {
+		background: transparent;
+		border: none;
+		color: #7f8c8d;
+		cursor: pointer;
+		font-size: 1rem;
+		padding: 0.5rem;
+		transition: color 0.2s;
 	}
 	
-	.status-inactive {
-		background: #f8d7da;
-		color: #721c24;
+	.back-btn:hover {
+		color: #2c3e50;
 	}
 	
-	.status-suspended {
-		background: #fff3cd;
-		color: #856404;
-	}
-	
-	.status-graduated {
-		background: #d1ecf1;
-		color: #0c5460;
+	.no-data {
+		text-align: center;
+		padding: 3rem;
+		color: #95a5a6;
+		grid-column: 1 / -1;
 	}
 	
 	@media (max-width: 768px) {
-		.sections-grid {
+		.page {
+			padding: 1rem;
+		}
+		
+		.teachers-grid {
 			grid-template-columns: 1fr;
 		}
 		
-		.large-modal {
-			width: 95%;
-		}
-		
-		.report-summary {
+		.date-inputs {
 			grid-template-columns: 1fr;
 		}
 		
-		.report-actions {
-			text-align: center;
+		.modal-actions {
+			flex-direction: column;
+		}
+		
+		.modal-actions button {
+			width: 100%;
 		}
 	}
 </style>
