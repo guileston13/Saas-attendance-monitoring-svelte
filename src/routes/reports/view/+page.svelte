@@ -137,7 +137,7 @@
 					} else {
 						console.error(
 							"Invalid image data format:",
-							result ? result.substring(0, 50) : "null",
+							result ? String(result).substring(0, 50) : "null",
 						);
 						reject(new Error("Invalid image data"));
 					}
@@ -242,13 +242,19 @@
 			style: "tableHeader",
 			alignment: "left",
 			colSpan: dateColumnsToShow.length,
+			rowSpan: 1,
 			fontSize: 8,
 			margin: [2, 2, 2, 2],
 		});
 
-		// Fill remaining header cells
 		for (let i = 1; i < dateColumnsToShow.length; i++) {
-			tableHeaders.push({});
+			tableHeaders.push({
+				text: '',
+				style: 'tableHeader',
+				alignment: 'left',
+				rowSpan: 1,
+				margin: [2, 2, 2, 2],
+			});
 		}
 
 		// Second header row with individual dates
@@ -279,19 +285,16 @@
 				...Array(totalColumns - 1).fill({}),
 			],
 			[
-				{}, // Empty cell for No. column
-				{ text: 'Subject:', style: 'infoLabel', alignment: 'left', margin:[0,5,0,5] },
-				{ text: subject.name || 'N/A', style: 'infoValue', alignment: 'left', margin: [0, 5, 0, 5] },
-				{ text: 'Class Schedule:', style: 'infoLabel', alignment: 'left', margin: [0, 5, 0, 5] },
-				{ text: scheduleTime, style: 'infoValue', alignment: 'left', colSpan: totalColumns - 4, margin: [0, 5, 0, 5] },
-				...Array(totalColumns - 5).fill({}),
+				{ text: 'Subject: ' + (subject.name || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: 2, margin:[0,5,0,5] },
+				{},
+				{ text: 'Class Schedule: ' + scheduleTime, style: 'infoLabel', alignment: 'left', colSpan: totalColumns - 2, margin: [0, 5, 0, 5] },
+				...Array(totalColumns - 3).fill({}),
 			],
 			[
-				{ text: 'Course Code:', style: 'infoLabel', alignment: 'left', margin: [0, 5, 0, 5] },
-				{ text: subject.code || 'N/A', style: 'infoValue', alignment: 'left', margin: [0, 5, 0, 5] },
-				{ text: 'Room No.:', style: 'infoLabel', alignment: 'left', margin: [0, 5, 0, 5] },
-				{ text: roomName || 'N/A', style: 'infoValue', alignment: 'left', colSpan: totalColumns - 3, margin: [0, 5, 0, 5] },
-				...Array(totalColumns - 4).fill({}),
+				{ text: 'Course Code: ' + (subject.code || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: 2, margin: [0, 5, 0, 5] },
+				{},
+				{ text: 'Room No.: ' + (roomName || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: totalColumns - 2, margin: [0, 5, 0, 5] },
+				...Array(totalColumns - 3).fill({}),
 			],
 		];
 		const tableBody = headerRows.concat([tableHeaders, dateHeaders]);
@@ -380,12 +383,11 @@
 		}
 
 		// Calculate column widths to fill the page width
-		// Legal landscape width is 1008 points, minus margins (40 + 40 = 80) = 928 points
-		// Table margin removed to align with header
-		const availableWidth = 810;
+		// A4 landscape width is 842 points, minus margins (72 left + 72 right = 144) = 698 points
+		const availableWidth = 698;
 		const noWidth = 25;
-		const nameWidth = 200;
-		const courseWidth = 60;
+		const nameWidth = 120;
+		const courseWidth = 50;
 		const remainingWidth =
 			availableWidth - noWidth - nameWidth - courseWidth;
 		const dateColumnWidth = remainingWidth / dateColumnsToShow.length;
@@ -584,7 +586,7 @@
 							return 4;
 						},
 					},
-					margin: [0, 0, 0, 20],
+					margin: [72, 0, 72, 20],
 				},
 				// Footer signature section
 				{
