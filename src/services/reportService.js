@@ -116,6 +116,7 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
             WHERE ar.section_id = ? 
             AND ar.subject_id = ?
             AND ar.attendance_date BETWEEN ? AND ?
+            AND ar.status IN ('Present', 'Absent', 'Late')
             ORDER BY s.LastName, s.FirstName, ar.attendance_date
         `;
         

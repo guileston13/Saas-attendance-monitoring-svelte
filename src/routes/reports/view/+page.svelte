@@ -15,6 +15,9 @@
 	$: startDate = $page.url.searchParams.get("startDate");
 	$: endDate = $page.url.searchParams.get("endDate");
 	$: teacherId = $page.url.searchParams.get("teacherId");
+	$: subjectCode = $page.url.searchParams.get("subjectCode");
+	$: roomName = $page.url.searchParams.get("roomName");
+	$: office = $page.url.searchParams.get("office");
 
 	onMount(async () => {
 		if (!sectionId || !subjectId || !startDate || !endDate) {
@@ -134,7 +137,7 @@
 					} else {
 						console.error(
 							"Invalid image data format:",
-							result ? result.substring(0, 50) : "null",
+							result ? String(result).substring(0, 50) : "null",
 						);
 						reject(new Error("Invalid image data"));
 					}
@@ -239,13 +242,19 @@
 			style: "tableHeader",
 			alignment: "left",
 			colSpan: dateColumnsToShow.length,
+			rowSpan: 1,
 			fontSize: 8,
 			margin: [2, 2, 2, 2],
 		});
 
-		// Fill remaining header cells
 		for (let i = 1; i < dateColumnsToShow.length; i++) {
-			tableHeaders.push({});
+			tableHeaders.push({
+				text: '',
+				style: 'tableHeader',
+				alignment: 'left',
+				rowSpan: 1,
+				margin: [2, 2, 2, 2],
+			});
 		}
 
 		// Second header row with individual dates
@@ -269,10 +278,35 @@
 		});
 
 		// Prepare table body
-		const tableBody = [tableHeaders, dateHeaders];
+		const totalColumns = 3 + dateColumnsToShow.length;
+		const headerRows = [
+			[
+				{ text: 'Office: ' + (office || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: totalColumns, margin: [0, 5, 0, 5] },
+				...Array(totalColumns - 1).fill({}),
+			],
+			[
+				{ text: 'Subject: ' + (subject.name || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: 2, margin:[0,5,0,5] },
+				{},
+				{ text: 'Class Schedule: ' + scheduleTime, style: 'infoLabel', alignment: 'left', colSpan: totalColumns - 2, margin: [0, 5, 0, 5] },
+				...Array(totalColumns - 3).fill({}),
+			],
+			[
+				{ text: 'Course Code: ' + (subject.code || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: 2, margin: [0, 5, 0, 5] },
+				{},
+				{ text: 'Room No.: ' + (roomName || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: totalColumns - 2, margin: [0, 5, 0, 5] },
+				...Array(totalColumns - 3).fill({}),
+			],
+		];
+		const tableBody = headerRows.concat([tableHeaders, dateHeaders]);
+
+		// Filter students to only include those with valid attendance (P, A, L) and no blank statuses
+		const validStudents = students.filter(studentData => {
+			const attendance = studentData.attendance;
+			return Object.values(attendance).every(record => !record || ['P', 'A', 'L'].includes(record.displayStatus));
+		});
 
 		// Add student rows
-		students.forEach((studentData, index) => {
+		validStudents.forEach((studentData, index) => {
 			const student = studentData.student;
 			const attendance = studentData.attendance;
 
@@ -293,7 +327,7 @@
 					margin: [2, 5, 2, 5],
 				},
 				{
-					text: subject.code || "TN401",
+					text: section.name || "BSIT 1A",
 					alignment: "left",
 					fontSize: 9,
 					margin: [2, 5, 2, 5],
@@ -332,7 +366,7 @@
 		// Legal landscape has about 600 points available height after header
 		// Each row is about 20 points, so we can fit about 25-30 rows
 		const totalRows = 25;
-		const remainingRows = Math.max(0, totalRows - students.length);
+		const remainingRows = Math.max(0, totalRows - validStudents.length);
 
 		for (let i = 0; i < remainingRows; i++) {
 			const emptyRow = [
@@ -349,12 +383,11 @@
 		}
 
 		// Calculate column widths to fill the page width
-		// Legal landscape width is 1008 points, minus margins (40 + 40 = 80) = 928 points
-		// Table margin removed to align with header
-		const availableWidth = 810;
+		// A4 landscape width is 842 points, minus margins (72 left + 72 right = 144) = 698 points
+		const availableWidth = 698;
 		const noWidth = 25;
-		const nameWidth = 200;
-		const courseWidth = 60;
+		const nameWidth = 120;
+		const courseWidth = 50;
 		const remainingWidth =
 			availableWidth - noWidth - nameWidth - courseWidth;
 		const dateColumnWidth = remainingWidth / dateColumnsToShow.length;
@@ -373,11 +406,6 @@
 			pageMargins: [40, 140, 40, 40],
 
 			header: function (currentPage, pageCount) {
-				// ONLY render header on page 1
-				if (currentPage !== 1) {
-					return { text: "", margin: [0, 0, 0, 0] };
-				}
-
 				return {
 					stack: [
 						{
@@ -528,7 +556,7 @@
 				// Attendance Table
 				{
 					table: {
-						headerRows: 2,
+						headerRows: 0,
 						widths: columnWidths,
 						body: tableBody,
 					},
@@ -558,7 +586,7 @@
 							return 4;
 						},
 					},
-					margin: [0, 0, 0, 20],
+					margin: [72, 0, 72, 20],
 				},
 				// Footer signature section
 				{
@@ -585,7 +613,7 @@
 							width: "50%",
 							stack: [
 								{
-									text: "Submitted to: TROADIO M. BARBOSA, MTTE",
+									text: "Submitted to: _____________________",
 									fontSize: 9,
 									alignment: "center",
 									decoration: "underline",
@@ -633,6 +661,24 @@
 				},
 				dateHeader: {
 					fontSize: 8,
+					bold: false,
+					color: "black",
+					alignment: "left",
+				},
+				roomInfo: {
+					fontSize: 10,
+					bold: true,
+					color: "black",
+					alignment: "left",
+				},
+				infoLabel: {
+					fontSize: 9,
+					bold: true,
+					color: "black",
+					alignment: "left",
+				},
+				infoValue: {
+					fontSize: 9,
 					bold: false,
 					color: "black",
 					alignment: "left",
