@@ -65,11 +65,28 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
                 s.SectionName,
                 sub.subject_name,
                 sub.subject_code,
+                r.RoomName,
                 ss.StartTime,
-                ss.EndTime
+                ss.EndTime,
+                ss.Monday,
+                ss.Tuesday,
+                ss.Wednesday,
+                ss.Thursday,
+                ss.Friday,
+                ss.MondayStart,
+                ss.MondayEnd,
+                ss.TuesdayStart,
+                ss.TuesdayEnd,
+                ss.WednesdayStart,
+                ss.WednesdayEnd,
+                ss.ThursdayStart,
+                ss.ThursdayEnd,
+                ss.FridayStart,
+                ss.FridayEnd
             FROM section_subjects ss
             JOIN sections s ON ss.SectionID = s.SectionID
             JOIN subjects sub ON ss.SubjectID = sub.SubjectID
+            LEFT JOIN room r ON ss.RoomID = r.RoomID
             WHERE ss.SectionID = ? AND ss.SubjectID = ?
         `;
         
@@ -80,6 +97,26 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
         }
         
         const schedule = scheduleData[0];
+        
+        // Build schedule time string based on days
+        let scheduleParts = [];
+        if (schedule.Monday == 1) {
+            scheduleParts.push(`M - ${schedule.MondayStart || ''} - ${schedule.MondayEnd || ''}`);
+        }
+        if (schedule.Tuesday == 1) {
+            scheduleParts.push(`T - ${schedule.TuesdayStart || ''} - ${schedule.TuesdayEnd || ''}`);
+        }
+        if (schedule.Wednesday == 1) {
+            scheduleParts.push(`W - ${schedule.WednesdayStart || ''} - ${schedule.WednesdayEnd || ''}`);
+        }
+        if (schedule.Thursday == 1) {
+            scheduleParts.push(`Th - ${schedule.ThursdayStart || ''} - ${schedule.ThursdayEnd || ''}`);
+        }
+        if (schedule.Friday == 1) {
+            scheduleParts.push(`F - ${schedule.FridayStart || ''} - ${schedule.FridayEnd || ''}`);
+        }
+        
+        const scheduleTime = scheduleParts.join(', ');
         
         // Get teacher information
         let teachers = [];
@@ -226,6 +263,7 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
         const scheduleInfo = [{
             startTime: schedule.StartTime,
             endTime: schedule.EndTime,
+            scheduleTime: scheduleTime,
             teacher: teacherName,
             teacherId: schedule.TeacherID
         }];
@@ -250,7 +288,9 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
                 attendanceDates,
                 students: Object.values(attendanceData),
                 totalStudents: students.length,
-                teacher: teacherName
+                teacher: teacherName,
+                scheduleTime: scheduleTime,
+                roomName: schedule.RoomName || ''
             }
         };
         

@@ -164,6 +164,8 @@
 			students,
 			teacher,
 			schedule,
+			scheduleTime,
+			roomName,
 		} = reportData;
 
 		// Format date helper
@@ -183,10 +185,7 @@
 		};
 
 		// Get schedule time
-		const scheduleTime =
-			schedule && schedule.length > 0
-				? `${schedule[0].startTime || ""} - ${schedule[0].endTime || ""}`
-				: "Friday 9:00 AM - 12:00 PM";
+		const displayScheduleTime = scheduleTime || "Friday 9:00 AM - 12:00 PM";
 
 		// Ensure we have at least 10 date columns
 		const minDateColumns = 10;
@@ -287,7 +286,7 @@
 			[
 				{ text: 'Subject: ' + (subject.name || 'N/A'), style: 'infoLabel', alignment: 'left', colSpan: 2, margin:[0,5,0,5] },
 				{},
-				{ text: 'Class Schedule: ' + scheduleTime, style: 'infoLabel', alignment: 'left', colSpan: totalColumns - 2, margin: [0, 5, 0, 5] },
+				{ text: 'Class Schedule: ' + displayScheduleTime, style: 'infoLabel', alignment: 'left', colSpan: totalColumns - 2, margin: [0, 5, 0, 5] },
 				...Array(totalColumns - 3).fill({}),
 			],
 			[
