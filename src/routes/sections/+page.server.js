@@ -1,5 +1,5 @@
 // Improved sections page with subject-based enrollment
-import { redirect } from '@sveltejs/kit';
+import { redirect, fail } from '@sveltejs/kit';
 import { getSessionFromCookies, isAuthenticated, hasRole } from '../../lib/auth.js';
 import { getAllSections, getSectionById, getSectionSubjects, createSection, updateSection, deleteSection } from '../../services/sectionService.js';
 import { getAllSubjects } from '../../services/subjectService.js';
@@ -161,7 +161,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
-			return { success: false, error: 'Unauthorized' };
+			return fail(403, { error: 'Unauthorized' });
 		}
 
 		try {
@@ -177,47 +177,53 @@ export const actions = {
 			const thursday = data.get('thursday') === 'on' ? 1 : 0;
 			const friday = data.get('friday') === 'on' ? 1 : 0;
 
-			// Parse per-day schedule with teachers
+			// Parse per-day schedule with teachers and rooms
 			const schedule = {
 				monday: { 
 					start: data.get('mondayStart') || null, 
 					end: data.get('mondayEnd') || null,
-					teacher: data.get('mondayTeacher') || null
+					teacher: data.get('mondayTeacher') || null,
+					room: data.get('mondayRoom') || null
 				},
 				tuesday: { 
 					start: data.get('tuesdayStart') || null, 
 					end: data.get('tuesdayEnd') || null,
-					teacher: data.get('tuesdayTeacher') || null
+					teacher: data.get('tuesdayTeacher') || null,
+					room: data.get('tuesdayRoom') || null
 				},
 				wednesday: { 
 					start: data.get('wednesdayStart') || null, 
 					end: data.get('wednesdayEnd') || null,
-					teacher: data.get('wednesdayTeacher') || null
+					teacher: data.get('wednesdayTeacher') || null,
+					room: data.get('wednesdayRoom') || null
 				},
 				thursday: { 
 					start: data.get('thursdayStart') || null, 
 					end: data.get('thursdayEnd') || null,
-					teacher: data.get('thursdayTeacher') || null
+					teacher: data.get('thursdayTeacher') || null,
+					room: data.get('thursdayRoom') || null
 				},
 				friday: { 
 					start: data.get('fridayStart') || null, 
 					end: data.get('fridayEnd') || null,
-					teacher: data.get('fridayTeacher') || null
+					teacher: data.get('fridayTeacher') || null,
+					room: data.get('fridayRoom') || null
 				}
 			};
 
 			if (!sectionId || !subjectId) {
-				return { success: false, error: 'Section ID and Subject ID are required' };
+				return fail(400, { error: 'Section ID and Subject ID are required' });
 			}
 
 			// Import the function
 			const { addSubjectToSection } = await import('../../services/sectionService.js');
 
 			await addSubjectToSection(sectionId, subjectId, teacherId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, schedule);
+			
 			return { success: true };
 		} catch (error) {
 			console.error('Add subject error:', error);
-			return { success: false, error: 'Failed to add subject' };
+			return fail(500, { error: 'Failed to add subject: ' + error.message });
 		}
 	},
 
@@ -225,7 +231,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
-			return { success: false, error: 'Unauthorized' };
+			return fail(403, { error: 'Unauthorized' });
 		}
 
 		try {
@@ -241,47 +247,53 @@ export const actions = {
 			const thursday = data.get('thursday') === 'on' ? 1 : 0;
 			const friday = data.get('friday') === 'on' ? 1 : 0;
 
-			// Parse per-day schedule with teachers
+			// Parse per-day schedule with teachers and rooms
 			const schedule = {
 				monday: { 
 					start: data.get('mondayStart') || null, 
 					end: data.get('mondayEnd') || null,
-					teacher: data.get('mondayTeacher') || null
+					teacher: data.get('mondayTeacher') || null,
+					room: data.get('mondayRoom') || null
 				},
 				tuesday: { 
 					start: data.get('tuesdayStart') || null, 
 					end: data.get('tuesdayEnd') || null,
-					teacher: data.get('tuesdayTeacher') || null
+					teacher: data.get('tuesdayTeacher') || null,
+					room: data.get('tuesdayRoom') || null
 				},
 				wednesday: { 
 					start: data.get('wednesdayStart') || null, 
 					end: data.get('wednesdayEnd') || null,
-					teacher: data.get('wednesdayTeacher') || null
+					teacher: data.get('wednesdayTeacher') || null,
+					room: data.get('wednesdayRoom') || null
 				},
 				thursday: { 
 					start: data.get('thursdayStart') || null, 
 					end: data.get('thursdayEnd') || null,
-					teacher: data.get('thursdayTeacher') || null
+					teacher: data.get('thursdayTeacher') || null,
+					room: data.get('thursdayRoom') || null
 				},
 				friday: { 
 					start: data.get('fridayStart') || null, 
 					end: data.get('fridayEnd') || null,
-					teacher: data.get('fridayTeacher') || null
+					teacher: data.get('fridayTeacher') || null,
+					room: data.get('fridayRoom') || null
 				}
 			};
 
 			if (!sectionId || !subjectId) {
-				return { success: false, error: 'Section ID and Subject ID are required' };
+				return fail(400, { error: 'Section ID and Subject ID are required' });
 			}
 
 			// Import the function
 			const { updateSectionSubject } = await import('../../services/sectionService.js');
 
 			await updateSectionSubject(sectionId, subjectId, teacherId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, schedule);
+			
 			return { success: true };
 		} catch (error) {
 			console.error('Update section subject error:', error);
-			return { success: false, error: 'Failed to update subject' };
+			return fail(500, { error: 'Failed to update subject: ' + error.message });
 		}
 	},
 

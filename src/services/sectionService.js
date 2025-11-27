@@ -65,11 +65,11 @@ export async function getSectionSubjects(sectionId) {
             ss.Wednesday,
             ss.Thursday,
             ss.Friday,
-            ss.MondayStart, ss.MondayEnd, ss.MondayTeacher,
-            ss.TuesdayStart, ss.TuesdayEnd, ss.TuesdayTeacher,
-            ss.WednesdayStart, ss.WednesdayEnd, ss.WednesdayTeacher,
-            ss.ThursdayStart, ss.ThursdayEnd, ss.ThursdayTeacher,
-            ss.FridayStart, ss.FridayEnd, ss.FridayTeacher
+            ss.MondayStart, ss.MondayEnd, ss.MondayTeacher, ss.MondayRoom,
+            ss.TuesdayStart, ss.TuesdayEnd, ss.TuesdayTeacher, ss.TuesdayRoom,
+            ss.WednesdayStart, ss.WednesdayEnd, ss.WednesdayTeacher, ss.WednesdayRoom,
+            ss.ThursdayStart, ss.ThursdayEnd, ss.ThursdayTeacher, ss.ThursdayRoom,
+            ss.FridayStart, ss.FridayEnd, ss.FridayTeacher, ss.FridayRoom
         FROM section_subjects ss
         JOIN subjects sub ON ss.SubjectID = sub.SubjectID
         LEFT JOIN teachers t ON ss.TeacherID = t.TeacherID
@@ -83,11 +83,11 @@ export async function getSectionSubjects(sectionId) {
                  ss.TeacherID, t.FirstName, t.LastName, 
                  ss.CreatedAt, ss.StartTime, ss.EndTime, ss.RoomID, r.RoomName,
                  ss.Monday, ss.Tuesday, ss.Wednesday, ss.Thursday, ss.Friday,
-                 ss.MondayStart, ss.MondayEnd, ss.MondayTeacher,
-                 ss.TuesdayStart, ss.TuesdayEnd, ss.TuesdayTeacher,
-                 ss.WednesdayStart, ss.WednesdayEnd, ss.WednesdayTeacher,
-                 ss.ThursdayStart, ss.ThursdayEnd, ss.ThursdayTeacher,
-                 ss.FridayStart, ss.FridayEnd, ss.FridayTeacher
+                 ss.MondayStart, ss.MondayEnd, ss.MondayTeacher, ss.MondayRoom,
+                 ss.TuesdayStart, ss.TuesdayEnd, ss.TuesdayTeacher, ss.TuesdayRoom,
+                 ss.WednesdayStart, ss.WednesdayEnd, ss.WednesdayTeacher, ss.WednesdayRoom,
+                 ss.ThursdayStart, ss.ThursdayEnd, ss.ThursdayTeacher, ss.ThursdayRoom,
+                 ss.FridayStart, ss.FridayEnd, ss.FridayTeacher, ss.FridayRoom
         ORDER BY sub.subject_name
     `, [sectionId]);
 
@@ -172,20 +172,20 @@ export async function addSubjectToSection(sectionId, subjectId, teacherId = null
         `INSERT INTO section_subjects (
             SectionID, SubjectID, TeacherID, StartTime, EndTime, 
             Monday, Tuesday, Wednesday, Thursday, Friday,
-            MondayStart, MondayEnd, MondayTeacher,
-            TuesdayStart, TuesdayEnd, TuesdayTeacher,
-            WednesdayStart, WednesdayEnd, WednesdayTeacher,
-            ThursdayStart, ThursdayEnd, ThursdayTeacher,
-            FridayStart, FridayEnd, FridayTeacher
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            MondayStart, MondayEnd, MondayTeacher, MondayRoom,
+            TuesdayStart, TuesdayEnd, TuesdayTeacher, TuesdayRoom,
+            WednesdayStart, WednesdayEnd, WednesdayTeacher, WednesdayRoom,
+            ThursdayStart, ThursdayEnd, ThursdayTeacher, ThursdayRoom,
+            FridayStart, FridayEnd, FridayTeacher, FridayRoom
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             sectionId, subjectId, teacherId, startTime, endTime,
             monday, tuesday, wednesday, thursday, friday,
-            schedule.monday?.start || null, schedule.monday?.end || null, schedule.monday?.teacher || null,
-            schedule.tuesday?.start || null, schedule.tuesday?.end || null, schedule.tuesday?.teacher || null,
-            schedule.wednesday?.start || null, schedule.wednesday?.end || null, schedule.wednesday?.teacher || null,
-            schedule.thursday?.start || null, schedule.thursday?.end || null, schedule.thursday?.teacher || null,
-            schedule.friday?.start || null, schedule.friday?.end || null, schedule.friday?.teacher || null
+            schedule.monday?.start || null, schedule.monday?.end || null, schedule.monday?.teacher || null, schedule.monday?.room || null,
+            schedule.tuesday?.start || null, schedule.tuesday?.end || null, schedule.tuesday?.teacher || null, schedule.tuesday?.room || null,
+            schedule.wednesday?.start || null, schedule.wednesday?.end || null, schedule.wednesday?.teacher || null, schedule.wednesday?.room || null,
+            schedule.thursday?.start || null, schedule.thursday?.end || null, schedule.thursday?.teacher || null, schedule.thursday?.room || null,
+            schedule.friday?.start || null, schedule.friday?.end || null, schedule.friday?.teacher || null, schedule.friday?.room || null
         ]
     );
 
@@ -212,20 +212,20 @@ export async function updateSectionSubject(sectionId, subjectId, teacherId, star
         `UPDATE section_subjects SET 
             TeacherID = ?, StartTime = ?, EndTime = ?, 
             Monday = ?, Tuesday = ?, Wednesday = ?, Thursday = ?, Friday = ?,
-            MondayStart = ?, MondayEnd = ?, MondayTeacher = ?,
-            TuesdayStart = ?, TuesdayEnd = ?, TuesdayTeacher = ?,
-            WednesdayStart = ?, WednesdayEnd = ?, WednesdayTeacher = ?,
-            ThursdayStart = ?, ThursdayEnd = ?, ThursdayTeacher = ?,
-            FridayStart = ?, FridayEnd = ?, FridayTeacher = ?
+            MondayStart = ?, MondayEnd = ?, MondayTeacher = ?, MondayRoom = ?,
+            TuesdayStart = ?, TuesdayEnd = ?, TuesdayTeacher = ?, TuesdayRoom = ?,
+            WednesdayStart = ?, WednesdayEnd = ?, WednesdayTeacher = ?, WednesdayRoom = ?,
+            ThursdayStart = ?, ThursdayEnd = ?, ThursdayTeacher = ?, ThursdayRoom = ?,
+            FridayStart = ?, FridayEnd = ?, FridayTeacher = ?, FridayRoom = ?
         WHERE SectionID = ? AND SubjectID = ?`,
         [
             teacherId, startTime, endTime,
             monday, tuesday, wednesday, thursday, friday,
-            schedule.monday?.start || null, schedule.monday?.end || null, schedule.monday?.teacher || null,
-            schedule.tuesday?.start || null, schedule.tuesday?.end || null, schedule.tuesday?.teacher || null,
-            schedule.wednesday?.start || null, schedule.wednesday?.end || null, schedule.wednesday?.teacher || null,
-            schedule.thursday?.start || null, schedule.thursday?.end || null, schedule.thursday?.teacher || null,
-            schedule.friday?.start || null, schedule.friday?.end || null, schedule.friday?.teacher || null,
+            schedule.monday?.start || null, schedule.monday?.end || null, schedule.monday?.teacher || null, schedule.monday?.room || null,
+            schedule.tuesday?.start || null, schedule.tuesday?.end || null, schedule.tuesday?.teacher || null, schedule.tuesday?.room || null,
+            schedule.wednesday?.start || null, schedule.wednesday?.end || null, schedule.wednesday?.teacher || null, schedule.wednesday?.room || null,
+            schedule.thursday?.start || null, schedule.thursday?.end || null, schedule.thursday?.teacher || null, schedule.thursday?.room || null,
+            schedule.friday?.start || null, schedule.friday?.end || null, schedule.friday?.teacher || null, schedule.friday?.room || null,
             sectionId, subjectId
         ]
     );

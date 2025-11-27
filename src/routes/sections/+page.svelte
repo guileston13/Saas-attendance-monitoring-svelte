@@ -12,6 +12,7 @@
 	$: subjects = data.subjects || [];
 	$: teachers = data.teachers || [];
 	$: students = data.students || [];
+	$: rooms = data.rooms || [];
 
 	let sectionSubjects = [];
 
@@ -629,6 +630,29 @@
 								</button>
 								<button
 									type="button"
+									class="btn btn-success"
+									on:click={(e) => {
+										e.stopPropagation();
+										selectSectionItem(section.SectionID);
+										openSubjectModal();
+									}}
+								>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											d="M12 5v14M5 12h14"
+										></path>
+									</svg>
+									Add Subject
+								</button>
+								<button
+									type="button"
 									class="btn btn-primary"
 									on:click={(e) =>
 										handleEnrollClick(e, section.SectionID)}
@@ -805,12 +829,15 @@
 					loading = true;
 					return async ({ result }) => {
 						loading = false;
+						console.log('Form result:', result);
 						if (result.type === "success") {
 							closeSubjectModal();
 							await loadSectionSubjects(
 								selectedSection.SectionID,
 							);
 							await invalidateAll();
+						} else if (result.type === "failure") {
+							alert(result.data?.error || "Failed to save subject");
 						}
 					};
 				}}
@@ -850,23 +877,6 @@
 						</div>
 					</div>
 				{/if}
-
-				<div class="form-group">
-					<label for="teacherId">Assign Teacher:</label>
-					<select
-						id="teacherId"
-						name="teacherId"
-						value={editingSubject?.TeacherID || ""}
-					>
-						<option value="">No teacher assigned</option>
-						{#each teachers as teacher}
-							<option value={teacher.TeacherID}>
-								{teacher.FirstName}
-								{teacher.LastName}
-							</option>
-						{/each}
-					</select>
-				</div>
 
 				<div class="form-group">
 					<label>Schedule Days:</label>
@@ -965,6 +975,21 @@
 								{/each}
 							</select>
 						</div>
+						<div class="room-input-group">
+							<label for="mondayRoom">Room:</label>
+							<select
+								id="mondayRoom"
+								name="mondayRoom"
+								value={editingSubject?.MondayRoom || ""}
+							>
+								<option value="">None</option>
+								{#each rooms as room}
+									<option value={room.RoomID}>
+										{room.RoomName}
+									</option>
+								{/each}
+							</select>
+						</div>
 					</div>
 				</div>
 
@@ -1006,6 +1031,21 @@
 									<option value={teacher.TeacherID}>
 										{teacher.FirstName}
 										{teacher.LastName}
+									</option>
+								{/each}
+							</select>
+						</div>
+						<div class="room-input-group">
+							<label for="tuesdayRoom">Room:</label>
+							<select
+								id="tuesdayRoom"
+								name="tuesdayRoom"
+								value={editingSubject?.TuesdayRoom || ""}
+							>
+								<option value="">None</option>
+								{#each rooms as room}
+									<option value={room.RoomID}>
+										{room.RoomName}
 									</option>
 								{/each}
 							</select>
@@ -1055,6 +1095,21 @@
 								{/each}
 							</select>
 						</div>
+						<div class="room-input-group">
+							<label for="wednesdayRoom">Room:</label>
+							<select
+								id="wednesdayRoom"
+								name="wednesdayRoom"
+								value={editingSubject?.WednesdayRoom || ""}
+							>
+								<option value="">None</option>
+								{#each rooms as room}
+									<option value={room.RoomID}>
+										{room.RoomName}
+									</option>
+								{/each}
+							</select>
+						</div>
 					</div>
 				</div>
 
@@ -1100,6 +1155,21 @@
 								{/each}
 							</select>
 						</div>
+						<div class="room-input-group">
+							<label for="thursdayRoom">Room:</label>
+							<select
+								id="thursdayRoom"
+								name="thursdayRoom"
+								value={editingSubject?.ThursdayRoom || ""}
+							>
+								<option value="">None</option>
+								{#each rooms as room}
+									<option value={room.RoomID}>
+										{room.RoomName}
+									</option>
+								{/each}
+							</select>
+						</div>
 					</div>
 				</div>
 
@@ -1141,6 +1211,21 @@
 									<option value={teacher.TeacherID}>
 										{teacher.FirstName}
 										{teacher.LastName}
+									</option>
+								{/each}
+							</select>
+						</div>
+						<div class="room-input-group">
+							<label for="fridayRoom">Room:</label>
+							<select
+								id="fridayRoom"
+								name="fridayRoom"
+								value={editingSubject?.FridayRoom || ""}
+							>
+								<option value="">None</option>
+								{#each rooms as room}
+									<option value={room.RoomID}>
+										{room.RoomName}
 									</option>
 								{/each}
 							</select>
@@ -2429,23 +2514,23 @@
 	}
 
 	/* ===== SECTIONS GRID ===== */
-	.sections-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-		gap: 20px;
-	}
+	   .sections-grid {
+		   display: grid;
+		   grid-template-columns: repeat(auto-fill, minmax(370px, 1fr));
+		   gap: 24px;
+	   }
 
-	.section-card-item {
-		background: rgba(255, 255, 255, 0.3);
-		border: 1px solid rgba(255, 255, 255, 0.4);
-		border-radius: 12px;
-		padding: 20px;
-		cursor: pointer;
-		transition: all 0.3s ease-out;
-		position: relative;
-		overflow: hidden;
-		animation: cascadeIn 0.5s ease-out forwards;
-	}
+	   .section-card-item {
+		   background: rgba(255, 255, 255, 0.3);
+		   border: 1px solid rgba(255, 255, 255, 0.4);
+		   border-radius: 12px;
+		   padding: 32px 28px 28px 28px;
+		   cursor: pointer;
+		   transition: all 0.3s ease-out;
+		   position: relative;
+		   overflow: hidden;
+		   animation: cascadeIn 0.5s ease-out forwards;
+	   }
 
 	.section-card-item::before {
 		content: "";

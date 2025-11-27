@@ -209,6 +209,12 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
         
         // Fill in attendance data - Late is considered present
         attendanceRecords.forEach(record => {
+            // Skip if student is not in the enrolled students list
+            if (!attendanceData[record.student_id]) {
+                console.warn(`Skipping attendance record for unenrolled student: ${record.student_id}`);
+                return;
+            }
+            
             const dateStr = formatDateString(record.attendance_date);
             
             let status = 'absent';
@@ -217,16 +223,16 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
             if (record.status === 'Present') {
                 status = 'present';
                 displayStatus = 'P';
-                attendanceData[record.StudentID].summary.present++;
+                attendanceData[record.student_id].summary.present++;
             } else if (record.status === 'Late') {
                 status = 'present';
                 displayStatus = 'L';
-                attendanceData[record.StudentID].summary.present++;
+                attendanceData[record.student_id].summary.present++;
             } else {
-                attendanceData[record.StudentID].summary.absent++;
+                attendanceData[record.student_id].summary.absent++;
             }
             
-            attendanceData[record.StudentID].attendance[dateStr] = {
+            attendanceData[record.student_id].attendance[dateStr] = {
                 status,
                 displayStatus,
                 recordedAt: record.recorded_at,

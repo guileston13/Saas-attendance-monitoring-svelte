@@ -197,55 +197,55 @@
 </script>
 
 <svelte:head>
-	\t<title>Students - School Management System</title>
+	<title>Students - School Management System</title>
 </svelte:head>
 
 <!-- Premium Loading Screen -->
 {#if isLoading}
-	\t
+	
 	<div class="loading-screen" class:fade-out={loadingFadeOut}>
-		\t\t
+		
 		<div class="particles-container">
-			\t\t\t{#each Array(20) as _, i}
-				\t\t\t\t
+			{#each Array(20) as _, i}
+				
 				<div class="particle particle-{(i % 4) + 1}"></div>
-				\t\t\t{/each}
-			\t\t
+				{/each}
+			
 		</div>
-		\t\t \t\t
+		 
 		<div class="loading-content">
-			\t\t\t
+			
 			<div class="loading-logo">
-				\t\t\t\t
+				
 				<div class="logo-pulse"></div>
-				\t\t\t\t<svg
+				<svg
 					class="logo-svg"
 					viewBox="0 0 24 24"
 					fill="none"
 					xmlns="http://www.w3.org/2000/svg"
 				>
-					\t\t\t\t\t<path
+					<path
 						d="M12 2L2 7L12 12L22 7L12 2Z"
 						fill="url(#gradient1)"
 						stroke="url(#gradient2)"
 						stroke-width="2"
 					/>
-					\t\t\t\t\t<path
+					<path
 						d="M2 17L12 22L22 17"
 						stroke="url(#gradient2)"
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					/>
-					\t\t\t\t\t<path
+					<path
 						d="M2 12L12 17L22 12"
 						stroke="url(#gradient2)"
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					/>
-					\t\t\t\t\t<defs>
-						\t\t\t\t\t\t<linearGradient
+					<defs>
+						<linearGradient
 							id="gradient1"
 							x1="2"
 							y1="2"
@@ -253,14 +253,14 @@
 							y2="12"
 							gradientUnits="userSpaceOnUse"
 						>
-							\t\t\t\t\t\t\t<stop stop-color="#3B82F6" />
-							\t\t\t\t\t\t\t<stop
+							<stop stop-color="#3B82F6" />
+							<stop
 								offset="1"
 								stop-color="#A855F7"
 							/>
-							\t\t\t\t\t\t</linearGradient
+							</linearGradient
 						>
-						\t\t\t\t\t\t<linearGradient
+						<linearGradient
 							id="gradient2"
 							x1="2"
 							y1="7"
@@ -268,73 +268,73 @@
 							y2="17"
 							gradientUnits="userSpaceOnUse"
 						>
-							\t\t\t\t\t\t\t<stop stop-color="#22C55E" />
-							\t\t\t\t\t\t\t<stop
+							<stop stop-color="#22C55E" />
+							<stop
 								offset="1"
 								stop-color="#F97316"
 							/>
-							\t\t\t\t\t\t</linearGradient
+							</linearGradient
 						>
-						\t\t\t\t\t</defs
+						</defs
 					>
-					\t\t\t\t</svg
+					</svg
 				>
-				\t\t\t
+				
 			</div>
-			\t\t\t \t\t\t
+			 
 			<div class="loading-brand">
-				\t\t\t\t
+				
 				<h1 class="brand-main">Students Management</h1>
-				\t\t\t\t
+				
 				<p class="brand-tagline">LOADING</p>
-				\t\t\t
+				
 			</div>
-			\t\t\t \t\t\t
+			 
 			<div class="loading-progress">
-				\t\t\t\t
+				
 				<p class="progress-text">{loadingText}...</p>
-				\t\t\t\t
+				
 				<div class="progress-bar">
-					\t\t\t\t\t
+					
 					<div
 						class="progress-fill"
 						style="width: {loadingProgress}%"
 					>
-						\t\t\t\t\t\t
+						
 						<div
 							class="progress-glow"
 							style="width: {loadingProgress}%"
 						></div>
-						\t\t\t\t\t
+						
 					</div>
-					\t\t\t\t
+					
 				</div>
-				\t\t\t\t
+				
 				<p class="progress-percentage">{loadingProgress}%</p>
-				\t\t\t
+				
 			</div>
-			\t\t\t \t\t\t
+			 
 			<div class="loading-dots">
-				\t\t\t\t<span class="dot dot-1"></span>
-				\t\t\t\t<span class="dot dot-2"></span>
-				\t\t\t\t<span class="dot dot-3"></span>
-				\t\t\t
+				<span class="dot dot-1"></span>
+				<span class="dot dot-2"></span>
+				<span class="dot dot-3"></span>
+				
 			</div>
-			\t\t
+			
 		</div>
-		\t\t \t\t
+		 
 		<div class="loading-orbs">
-			\t\t\t
+			
 			<div class="orb orb-1"></div>
-			\t\t\t
+			
 			<div class="orb orb-2"></div>
-			\t\t\t
+			
 			<div class="orb orb-3"></div>
-			\t\t\t
+			
 			<div class="orb orb-4"></div>
-			\t\t
+			
 		</div>
-		\t
+		
 	</div>
 {/if}
 
@@ -343,13 +343,13 @@
 	class="animated-background"
 	style="transform: translateY({scrollY * 0.3}px)"
 >
-	\t
+	
 	<div class="dot-pattern"></div>
-	\t
+	
 	<div class="floating-orb orb-bg-1"></div>
-	\t
+	
 	<div class="floating-orb orb-bg-2"></div>
-	\t
+	
 	<div class="floating-orb orb-bg-3"></div>
 </div>
 
