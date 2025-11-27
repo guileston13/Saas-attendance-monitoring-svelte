@@ -22,7 +22,7 @@ export async function getAllTeachersForReports() {
 
 /**
  * Get subjects taught by a teacher (showing all days combined)
- * SIMPLIFIED VERSION - Works without day-specific columns
+ * Checks all day-specific teacher fields (MondayTeacher, TuesdayTeacher, etc.)
  * @param {number} teacherId - Teacher ID
  * @returns {Promise<Array>} List of subjects with teaching days
  */
@@ -34,16 +34,24 @@ export async function getTeacherSubjects(teacherId) {
             s.SectionName,
             sub.subject_name,
             sub.subject_code,
-            ss.TeacherID
+            ss.MondayTeacher,
+            ss.TuesdayTeacher,
+            ss.WednesdayTeacher,
+            ss.ThursdayTeacher,
+            ss.FridayTeacher
         FROM section_subjects ss
         JOIN sections s ON ss.SectionID = s.SectionID
         JOIN subjects sub ON ss.SubjectID = sub.SubjectID
-        WHERE ss.TeacherID = ?
+        WHERE (ss.MondayTeacher = ? 
+            OR ss.TuesdayTeacher = ? 
+            OR ss.WednesdayTeacher = ? 
+            OR ss.ThursdayTeacher = ? 
+            OR ss.FridayTeacher = ?)
         AND s.StatusID = 1
         ORDER BY sub.subject_name, s.SectionName
     `;
     
-    return await executeQuery(query, [teacherId]);
+    return await executeQuery(query, [teacherId, teacherId, teacherId, teacherId, teacherId]);
 }
 
 /**
