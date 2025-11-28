@@ -153,13 +153,21 @@
       console.log("📡 SSE message received:", event.data);
       try {
         const data = JSON.parse(event.data);
+        const myDevice = `device${roomId}`;
+        
+        // Only react if message is for this device or for "all"
+        if (data.device && data.device !== myDevice && data.device !== 'all') {
+          console.log(`📡 Ignoring SSE for ${data.device} (I am ${myDevice})`);
+          return;
+        }
+
         if (data.status === "camera_started") {
-          console.log("🎥 Camera started!");
+          console.log(`🎥 Camera started for ${myDevice}!`);
           startLoginCamera();
         }
 
         if (data.status === "camera_stopped") {
-          console.log("🛑 Camera stopped!");
+          console.log(`🛑 Camera stopped for ${myDevice}!`);
           stopLoginCamera();
         }
       } catch (err) {

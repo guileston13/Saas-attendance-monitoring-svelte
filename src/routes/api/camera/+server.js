@@ -7,12 +7,12 @@ export async function POST({ request }) {
   console.log('📸 Received camera trigger:', data);
 
   if (data.action === 'start_camera') {
-    _broadcast({ status: 'camera_started' });
-    return json({ status: 'camera_started' });
+    _broadcast({ status: 'camera_started', device: data.device || 'all' });
+    return json({ status: 'camera_started', device: data.device || 'all' });
   }
   if (data.action === 'stop_camera') {
-    _broadcast({ status: 'camera_stopped' });
-    return json({ status: 'camera_stopped' });
+    _broadcast({ status: 'camera_stopped', device: data.device || 'all' });
+    return json({ status: 'camera_stopped', device: data.device || 'all' });
   }
 
   return json({ error: 'Unknown action' }, { status: 400 });
