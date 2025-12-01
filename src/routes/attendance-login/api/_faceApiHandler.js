@@ -12,7 +12,8 @@ faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 const PROJECT_ROOT = path.resolve(process.cwd());
 const FACE_DIR = path.join(PROJECT_ROOT, 'static', 'face');
 const DESC_DIR = path.join(PROJECT_ROOT, 'static', 'descriptors');
-const MODEL_PATH = path.join(PROJECT_ROOT, 'models');
+// Load models from the static assets directory so both client and server use the same files
+const MODEL_PATH = path.join(PROJECT_ROOT, 'static', 'models');
 
 if (!fs.existsSync(FACE_DIR)) fs.mkdirSync(FACE_DIR, { recursive: true });
 if (!fs.existsSync(DESC_DIR)) fs.mkdirSync(DESC_DIR, { recursive: true });
@@ -170,19 +171,75 @@ function simpleFaceCrop(img, box) {
   return canvas;
 }
 
+/**
+ * Pre-process image for better face detection
+ * Applies contrast enhancement and normalization
+ * @param {Image} img - Source image
+ * @returns {Canvas} - Pre-processed canvas
+ */
+function preprocessImage(img) {
+  const canvas = new Canvas(img.width, img.height);
+  const ctx = canvas.getContext('2d');
+  
+  // Draw original image
+  ctx.drawImage(img, 0, 0);
+  
+  // Get image data for processing
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  
+  // Calculate histogram for contrast enhancement
+  let minVal = 255, maxVal = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    if (gray < minVal) minVal = gray;
+    if (gray > maxVal) maxVal = gray;
+  }
+  
+  // Apply contrast stretching (histogram equalization lite)
+  const range = maxVal - minVal || 1;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = ((data[i] - minVal) / range) * 255;     // R
+    data[i + 1] = ((data[i + 1] - minVal) / range) * 255; // G
+    data[i + 2] = ((data[i + 2] - minVal) / range) * 255; // B
+    // Alpha unchanged
+  }
+  
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
 export async function handleCheckFace(request) {
   await ensureModelsLoaded();
   try {
     const { image } = await request.json();
-    if (!image) return new Response(JSON.stringify({ orientation: 'none' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (!image) return new Response(JSON.stringify({ orientation: 'none', detected: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
     const img = await imageFromBase64(image);
-    const detection = await faceapi
-      .detectSingleFace(img, mtcnnOptions)
+    
+    // Pre-process image for better detection
+    const processedImg = preprocessImage(img);
+    
+    // Try detection on pre-processed image first
+    let detection = await faceapi
+      .detectSingleFace(processedImg, mtcnnOptions)
       .withFaceLandmarks()
       .withFaceDescriptor();
 
-    if (!detection) return new Response(JSON.stringify({ orientation: 'none' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    // If pre-processed detection fails, try original image
+    if (!detection) {
+      detection = await faceapi
+        .detectSingleFace(img, mtcnnOptions)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+    }
+
+    if (!detection) {
+      return new Response(JSON.stringify({ 
+        orientation: 'none', 
+        detected: false 
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
 
     const { landmarks } = detection;
     const nose = landmarks.getNose()[3];
@@ -196,13 +253,17 @@ export async function handleCheckFace(request) {
     if (noseOffset > 15) orientation = 'left';
     if (noseOffset < -15) orientation = 'right';
 
-    return new Response(JSON.stringify({ orientation }), {
+    return new Response(JSON.stringify({ 
+      orientation,
+      detected: true,
+      confidence: detection.detection.score
+    }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (err) {
     console.error(err);
-    return new Response(JSON.stringify({ orientation: 'none' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ orientation: 'none', detected: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 }
 
@@ -236,13 +297,14 @@ export async function handleRegister(request) {
       });
     }
 
-    const descriptors = [];
+    // ========== PHASE 1: SAVE ALL IMAGES FIRST ==========
+    console.log(`\n🔵 PHASE 1: Saving ${studentId}'s images...`);
+    const savedImagePaths = [];
     
     for (let i = 1; i <= 3; i++) {
       const imageData = images[`pic${i}`];
       
-      // Debug: Log image info
-      console.log(`📷 Image ${i}: received ${imageData ? imageData.length : 0} bytes, starts with: ${imageData ? imageData.substring(0, 30) : 'N/A'}`);
+      console.log(`📷 Image ${i}: received ${imageData ? imageData.length : 0} bytes`);
       
       if (!imageData || imageData.length < 100) {
         console.warn(`⚠️ Image ${i} is empty or too small, skipping`);
@@ -252,58 +314,122 @@ export async function handleRegister(request) {
       const img = await imageFromBase64(imageData);
       console.log(`📐 Image ${i} loaded: ${img.width}x${img.height}`);
       
-      // ALWAYS save the image first (for debugging and reference)
+      // Save the original image
       const imgCanvas = new Canvas(img.width, img.height);
       const ctx = imgCanvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
       const imgBuffer = imgCanvas.toBuffer('image/png');
-      fs.writeFileSync(path.join(FACE_DIR, `${studentId}_pic${i}.png`), imgBuffer);
-      console.log(`💾 Saved image: ${studentId}_pic${i}.png`);
-      
-      // Try to detect face and extract descriptor
-      const detection = await faceapi
-        .detectSingleFace(img, mtcnnOptions)
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-
-      if (!detection) {
-        console.warn(`⚠️ No face detected in image ${i} (profile view?) - image saved but no descriptor`);
-        continue;
-      }
-      
-      console.log(`✅ Face detected in image ${i}, confidence: ${detection.detection.score.toFixed(3)}`);
-
-      // Use the descriptor directly from detection
-      descriptors.push(Array.from(detection.descriptor));
-      console.log(`✅ Image ${i}: Descriptor extracted successfully`);
+      const imagePath = path.join(FACE_DIR, `${studentId}_pic${i}.png`);
+      fs.writeFileSync(imagePath, imgBuffer);
+      savedImagePaths.push({ index: i, path: imagePath });
+      console.log(`💾 Saved original image: ${studentId}_pic${i}.png`);
     }
-
-    if (descriptors.length === 0) {
-      return new Response(JSON.stringify({ message: '❌ No faces detected in any image' }), {
+    
+    if (savedImagePaths.length === 0) {
+      return new Response(JSON.stringify({ message: '❌ No valid images received' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-
-    console.log(images.pic1.substring(0, 50)); // should start with data:image/png;base64
     
+    console.log(`✅ Phase 1 complete: ${savedImagePaths.length} images saved\n`);
+
+    // ========== PHASE 2: LOAD SAVED IMAGES, CROP FACES, EXTRACT DESCRIPTORS ==========
+    console.log(`🟢 PHASE 2: Processing saved images for ${studentId}...`);
+    const descriptors = [];
+    
+    for (const { index, path: imagePath } of savedImagePaths) {
+      console.log(`\n🔍 Processing saved image ${index}...`);
+      
+      // Load the saved image from disk
+      const imageBuffer = fs.readFileSync(imagePath);
+      const img = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = imageBuffer;
+      });
+      
+      // Pre-process image for better detection
+      const processedImg = preprocessImage(img);
+      
+      // Try detection on pre-processed image first
+      let detection = await faceapi
+        .detectSingleFace(processedImg, mtcnnOptions)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      // If pre-processed detection fails, try original image
+      if (!detection) {
+        console.log(`🔄 Pre-processed detection failed, trying original...`);
+        detection = await faceapi
+          .detectSingleFace(img, mtcnnOptions)
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+      }
+
+      if (!detection) {
+        console.warn(`⚠️ No face detected in saved image ${index}`);
+        continue;
+      }
+      
+      console.log(`✅ Face detected in image ${index}, confidence: ${detection.detection.score.toFixed(3)}`);
+      
+      // 🎯 CROP THE FACE - this removes background for better accuracy
+      const croppedFace = cropAlignedFace(img, detection);
+      
+      // Save the cropped face image for reference
+      const croppedBuffer = croppedFace.toBuffer('image/png');
+      const croppedPath = path.join(FACE_DIR, `${studentId}_pic${index}_cropped.png`);
+      fs.writeFileSync(croppedPath, croppedBuffer);
+      console.log(`💾 Saved cropped face: ${studentId}_pic${index}_cropped.png (${FACE_CROP_SIZE}x${FACE_CROP_SIZE})`);
+      
+      // Extract descriptor from the CROPPED face (no background interference)
+      const croppedDescriptor = await extractDescriptorFromCrop(croppedFace);
+      
+      if (croppedDescriptor) {
+        descriptors.push(Array.from(croppedDescriptor));
+        console.log(`✅ Image ${index}: Cropped face descriptor extracted (high accuracy)`);
+      } else {
+        // Fallback to original detection descriptor
+        descriptors.push(Array.from(detection.descriptor));
+        console.log(`⚠️ Image ${index}: Using original descriptor (fallback)`);
+      }
+    }
+
+    if (descriptors.length === 0) {
+      return new Response(JSON.stringify({ message: '❌ No faces detected in any saved image' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    console.log(`\n✅ Phase 2 complete: ${descriptors.length} descriptors extracted from cropped faces`);
+
     // Save descriptors with student info
     const descriptorData = {
       studentId,
       firstName,
       middleInitial,
       surname,
-      descriptors
+      descriptors,
+      registeredAt: new Date().toISOString(),
+      imageCount: savedImagePaths.length,
+      descriptorCount: descriptors.length
     };
-    fs.writeFileSync(descFile, JSON.stringify(descriptorData));
+    fs.writeFileSync(descFile, JSON.stringify(descriptorData, null, 2));
     
-    return new Response(JSON.stringify({ message: '✅ Registration successful!' }), {
+    console.log(`🎉 Registration complete for ${studentId}: ${descriptors.length} face descriptors saved\n`);
+    
+    return new Response(JSON.stringify({ 
+      message: `✅ Registration successful! ${descriptors.length} face descriptors saved.` 
+    }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (err) {
     console.error('Registration error:', err);
-    return new Response(JSON.stringify({ message: '❌ Registration failed' }), {
+    return new Response(JSON.stringify({ message: '❌ Registration failed: ' + err.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -342,9 +468,16 @@ export async function handleLoginRecognize(request) {
       });
     }
     
-    // Use descriptor directly from detection (simpler and more reliable)
-    const queryDescriptor = detection.descriptor;
     console.log(`🔍 Login: Face detected with confidence ${detection.detection.score.toFixed(3)}`);
+    
+    // 🎯 CROP THE FACE for better matching accuracy (same as registration)
+    const croppedFace = cropAlignedFace(img, detection);
+    const croppedDescriptor = await extractDescriptorFromCrop(croppedFace);
+    
+    // Use cropped descriptor if available, fallback to original
+    const queryDescriptor = croppedDescriptor || detection.descriptor;
+    console.log(`🔍 Login: Using ${croppedDescriptor ? 'cropped face' : 'original'} descriptor for matching`);
+    
     let bestMatch = null;
     let bestDistance = Infinity;
 

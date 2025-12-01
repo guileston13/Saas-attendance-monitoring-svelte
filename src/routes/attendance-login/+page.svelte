@@ -625,34 +625,70 @@
   async function autoCaptureSequence() {
     const instructions = {
       1: "Look straight ahead",
-      2: "Turn your face slightly to the RIGHT",
+      2: "Turn your face slightly to the RIGHT", 
       3: "Turn your face slightly to the LEFT"
     };
 
-    while (faceStep <= 3) {
+    const MAX_RETRIES = 5; // Max retries per step
+
+    for (let step = 1; step <= 3; step++) {
+      faceStep = step;
       let captured = false;
-      console.log("🟢 Waiting for:", instructions[faceStep]);
+      let retries = 0;
 
-      while (!captured) {
-        const { orientation } = await checkOrientation();
-        console.log("Orientation:", orientation);
-
-        if (faceStep === 1 && orientation === "front") captured = true;
-        if (faceStep === 2 && orientation === "right") captured = true;
-        if (faceStep === 3 && orientation === "left") captured = true;
-
-        if (captured) {
-          const frame = takeSnapshot();
-          capturedImages[`pic${faceStep}`] = frame;
-          console.log(`✅ Auto captured step ${faceStep}`);
-          faceStep++;
-          await new Promise(res => setTimeout(res, 1500)); // pause before next step
+      while (!captured && retries < MAX_RETRIES) {
+        console.log(`🟢 Step ${step}: ${instructions[step]} (attempt ${retries + 1}/${MAX_RETRIES})`);
+        
+        // Brief pause before capture
+        await new Promise(res => setTimeout(res, 800));
+        
+        // Capture frame
+        const frame = takeSnapshot();
+        
+        // Verify face is detected using /api/check-face
+        try {
+          const res = await fetch(`${SERVER_URL}/check-face`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: frame })
+          });
+          const { orientation } = await res.json();
+          
+          if (orientation !== 'none') {
+            // Face detected! Save this frame
+            capturedImages[`pic${step}`] = frame;
+            console.log(`✅ Step ${step}: Face detected (${orientation}), captured!`);
+            captured = true;
+          } else {
+            // No face detected, retry
+            retries++;
+            console.log(`⚠️ Step ${step}: No face detected, retrying... (${retries}/${MAX_RETRIES})`);
+            if (retries < MAX_RETRIES) {
+              await new Promise(res => setTimeout(res, 500)); // Short delay before retry
+            }
+          }
+        } catch (err) {
+          console.error("Check-face error:", err);
+          retries++;
         }
+      }
 
-        await new Promise(res => setTimeout(res, 2000)); // polling interval
+      if (!captured) {
+        // Max retries reached, capture anyway and let server handle it
+        const frame = takeSnapshot();
+        capturedImages[`pic${step}`] = frame;
+        console.log(`⚠️ Step ${step}: Max retries reached, capturing anyway`);
+      }
+
+      // Brief pause before next step
+      if (step < 3) {
+        await new Promise(res => setTimeout(res, 1000));
       }
     }
 
+    faceStep = 4; // Mark as complete
+    console.log("📸 All 3 images captured with face verification");
+    
     // After all 3 captured → register
     await saveData();
   }
@@ -2228,6 +2264,8 @@
     border-radius: 1rem;
     border: 2px solid rgba(255, 255, 255, 0.2);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    /* Mirror the video horizontally for a natural webcam feel */
+    transform: scaleX(-1);
   }
 
   .face-instruction {
