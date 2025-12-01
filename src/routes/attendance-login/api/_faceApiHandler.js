@@ -59,66 +59,49 @@ const FACE_CROP_SIZE = 160;
 const FACE_PADDING = 0.3; // 30% padding around detected face
 
 /**
- * Crop and align face from image based on detection
- * This ensures only the face region is used for descriptor extraction,
- * eliminating background interference for higher accuracy
+ * Crop face from image based on detection - SIMPLE SQUARE CROP
+ * No rotation to avoid distortion, just extracts face region with padding
  * @param {Image} img - Source image
  * @param {Object} detection - face-api.js detection result
- * @returns {Canvas} - Cropped and aligned face canvas
+ * @returns {Canvas} - Cropped face canvas (square, no distortion)
  */
 function cropAlignedFace(img, detection) {
   const box = detection.detection.box;
-  const landmarks = detection.landmarks;
   
-  // Get eye positions for alignment
-  const leftEye = landmarks.getLeftEye();
-  const rightEye = landmarks.getRightEye();
+  // Make it square using the larger dimension
+  const size = Math.max(box.width, box.height);
+  const paddedSize = size * (1 + FACE_PADDING);
   
-  // Calculate eye centers
-  const leftEyeCenter = {
-    x: leftEye.reduce((sum, p) => sum + p.x, 0) / leftEye.length,
-    y: leftEye.reduce((sum, p) => sum + p.y, 0) / leftEye.length
-  };
-  const rightEyeCenter = {
-    x: rightEye.reduce((sum, p) => sum + p.x, 0) / rightEye.length,
-    y: rightEye.reduce((sum, p) => sum + p.y, 0) / rightEye.length
-  };
+  // Calculate crop region centered on face
+  const centerX = box.x + box.width / 2;
+  const centerY = box.y + box.height / 2;
   
-  // Calculate angle for alignment (make eyes horizontal)
-  const dx = rightEyeCenter.x - leftEyeCenter.x;
-  const dy = rightEyeCenter.y - leftEyeCenter.y;
-  const angle = Math.atan2(dy, dx);
+  // Source coordinates (with bounds checking)
+  let srcX = Math.max(0, centerX - paddedSize / 2);
+  let srcY = Math.max(0, centerY - paddedSize / 2);
+  let srcW = paddedSize;
+  let srcH = paddedSize;
   
-  // Calculate face center and size with padding
-  const faceCenterX = box.x + box.width / 2;
-  const faceCenterY = box.y + box.height / 2;
-  const faceSize = Math.max(box.width, box.height) * (1 + FACE_PADDING);
+  // Adjust if crop goes outside image bounds
+  if (srcX + srcW > img.width) srcW = img.width - srcX;
+  if (srcY + srcH > img.height) srcH = img.height - srcY;
   
-  // Create output canvas
+  // Create output canvas (square)
   const canvas = new Canvas(FACE_CROP_SIZE, FACE_CROP_SIZE);
   const ctx = canvas.getContext('2d');
   
-  // Fill with neutral gray (reduces edge artifacts)
+  // Fill with neutral gray (for any empty areas)
   ctx.fillStyle = '#808080';
   ctx.fillRect(0, 0, FACE_CROP_SIZE, FACE_CROP_SIZE);
   
-  // Apply rotation and translation to center and align the face
-  ctx.save();
-  ctx.translate(FACE_CROP_SIZE / 2, FACE_CROP_SIZE / 2);
-  ctx.rotate(-angle);
+  // Draw cropped face - maintain aspect ratio by using same scale for both dimensions
+  const scale = FACE_CROP_SIZE / paddedSize;
+  const destW = srcW * scale;
+  const destH = srcH * scale;
+  const destX = (FACE_CROP_SIZE - destW) / 2;
+  const destY = (FACE_CROP_SIZE - destH) / 2;
   
-  // Calculate scale to fit face in crop size
-  const scale = FACE_CROP_SIZE / faceSize;
-  ctx.scale(scale, scale);
-  
-  // Draw the face centered
-  ctx.drawImage(
-    img,
-    -faceCenterX,
-    -faceCenterY
-  );
-  
-  ctx.restore();
+  ctx.drawImage(img, srcX, srcY, srcW, srcH, destX, destY, destW, destH);
   
   return canvas;
 }

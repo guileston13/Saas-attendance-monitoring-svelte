@@ -266,9 +266,9 @@
       await html5QrCode.start(
         cameraConfig,
         {
-          fps: 10,
-          qrbox: 250,
-          aspectRatio: 1.3333
+          fps: 5,  // Slower for better detection
+          qrbox: 350,  // Larger scan area
+          // aspectRatio: 1.3333  // Remove fixed aspect ratio for better compatibility
         },
         (decodedText) => {
           console.log("QR scanned:", decodedText);
@@ -283,7 +283,10 @@
           stopScanner();
         },
         (errorMessage) => {
-          console.warn("QR scanning error:", errorMessage);
+          // Only log occasional errors to avoid spam
+          if (Math.random() < 0.01) {  // Log ~1% of errors
+            console.warn("QR scanning error:", errorMessage);
+          }
         }
       );
 
@@ -382,31 +385,84 @@
     showFacePage = false;
   }
 
-  // Take snapshot from video
+  // Take snapshot from video - crops center to 640x480 without stretching
   function takeSnapshot() {
     const ctx = canvas.getContext("2d");
 
-    // target size for FaceAPI detection
+    // Output size (4:3)
     const TARGET_WIDTH = 640;
     const TARGET_HEIGHT = 480;
-
+    
     canvas.width = TARGET_WIDTH;
     canvas.height = TARGET_HEIGHT;
 
-    // draw scaled image from video
-    ctx.drawImage(video, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+    // Get video's native dimensions
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+    
+    // Calculate crop region from center (no stretch, just crop/zoom)
+    const targetAspect = TARGET_WIDTH / TARGET_HEIGHT; // 4:3 = 1.333
+    const videoAspect = videoWidth / videoHeight;
+    
+    let srcX, srcY, srcWidth, srcHeight;
+    
+    if (videoAspect > targetAspect) {
+      // Video is wider than target - crop left/right
+      srcHeight = videoHeight;
+      srcWidth = videoHeight * targetAspect;
+      srcX = (videoWidth - srcWidth) / 2;
+      srcY = 0;
+    } else {
+      // Video is taller than target - crop top/bottom
+      srcWidth = videoWidth;
+      srcHeight = videoWidth / targetAspect;
+      srcX = 0;
+      srcY = (videoHeight - srcHeight) / 2;
+    }
 
-    return canvas.toDataURL("image/jpeg");
+    // Draw cropped center region - no stretching
+    ctx.drawImage(video, srcX, srcY, srcWidth, srcHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+
+    return canvas.toDataURL("image/jpeg", 0.9);
   }
 
-  // 🎯 IMPROVED: Convert canvas to compressed JPEG for login
+  // 🎯 IMPROVED: Convert canvas to compressed JPEG for login - crops center to 640x480
   function takeLoginSnapshot() {
-    loginCanvas.width = loginVideo.videoWidth;
-    loginCanvas.height = loginVideo.videoHeight;
-    loginCtx.drawImage(loginVideo, 0, 0, loginCanvas.width, loginCanvas.height);
+    // Output size (4:3)
+    const TARGET_WIDTH = 640;
+    const TARGET_HEIGHT = 480;
+    
+    loginCanvas.width = TARGET_WIDTH;
+    loginCanvas.height = TARGET_HEIGHT;
 
-    // Return compressed JPEG (60% quality) instead of PNG
-    // JPEG is ~5-10x smaller than PNG
+    // Get video's native dimensions
+    const videoWidth = loginVideo.videoWidth;
+    const videoHeight = loginVideo.videoHeight;
+    
+    // Calculate crop region from center (no stretch, just crop/zoom)
+    const targetAspect = TARGET_WIDTH / TARGET_HEIGHT; // 4:3 = 1.333
+    const videoAspect = videoWidth / videoHeight;
+    
+    let srcX, srcY, srcWidth, srcHeight;
+    
+    if (videoAspect > targetAspect) {
+      // Video is wider than target - crop left/right
+      srcHeight = videoHeight;
+      srcWidth = videoHeight * targetAspect;
+      srcX = (videoWidth - srcWidth) / 2;
+      srcY = 0;
+    } else {
+      // Video is taller than target - crop top/bottom
+      srcWidth = videoWidth;
+      srcHeight = videoWidth / targetAspect;
+      srcX = 0;
+      srcY = (videoHeight - srcHeight) / 2;
+    }
+
+    // Draw cropped center region - no stretching
+    loginCtx.drawImage(loginVideo, srcX, srcY, srcWidth, srcHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+
+    // Return compressed JPEG (60% quality)
     return loginCanvas.toDataURL("image/jpeg", 0.6);
   }
 
@@ -572,39 +628,51 @@
 
   async function drawFaceBox() {
     if (!video || video.readyState !== 4) return;
-    overlayCanvas.width = video.videoWidth;
-    overlayCanvas.height = video.videoHeight;
+    
+    // Size overlay to match video element's display size (1024x600)
+    overlayCanvas.width = video.clientWidth;
+    overlayCanvas.height = video.clientHeight;
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+    // Calculate scale factors to align detection coordinates with display
+    const scaleX = overlayCanvas.width / video.videoWidth;
+    const scaleY = overlayCanvas.height / video.videoHeight;
 
     // Detect face
     // @ts-ignore
     const detection = await window.faceapi.detectSingleFace(video, new window.faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
     if (detection) {
       const box = detection.detection.box;
-      // Make the box smaller (e.g., 60% of original size) and move it to the left
-      const scale = 0.6;
-      const offsetX = -box.width * 0.2; // move left by 20% of original width
-      const newWidth = box.width * scale;
-      const newHeight = box.height * scale;
-      const newX = box.x + offsetX;
-      const newY = box.y + (box.height - newHeight) / 2;
-      faceBox = { x: newX, y: newY, width: 20, height: 30 };
-      // Draw rectangle
+      
+      // Scale coordinates to match display size
+      const scaledX = box.x * scaleX;
+      const scaledY = box.y * scaleY;
+      const scaledWidth = box.width * scaleX;
+      const scaledHeight = box.height * scaleY;
+      
+      faceBox = { x: scaledX, y: scaledY, width: scaledWidth, height: scaledHeight };
+      
+      // Draw rectangle around detected face
       overlayCtx.strokeStyle = '#00FF00';
       overlayCtx.lineWidth = 3;
-      overlayCtx.strokeRect(100, 40, 120, 120);
-      // Draw instruction
+      overlayCtx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
+      
+      // Draw instruction text above the face box
       overlayCtx.font = '24px Arial';
       overlayCtx.fillStyle = '#00FF00';
       faceInstruction = getFaceInstruction(faceStep);
-      overlayCtx.fillText(faceInstruction, 100, 40 - 10);
+      overlayCtx.fillText(faceInstruction, scaledX, scaledY - 10);
     } else {
       faceBox = null;
       faceInstruction = getFaceInstruction(faceStep);
+      
+      // Draw "no face detected" message in center
       overlayCtx.font = '24px Arial';
       overlayCtx.fillStyle = '#FF0000';
-      overlayCtx.fillText('No face detected', 20, 40);
-      overlayCtx.fillText(faceInstruction, 20, 70);
+      const centerX = overlayCanvas.width / 2 - 100;
+      const centerY = overlayCanvas.height / 2;
+      overlayCtx.fillText('No face detected', centerX, centerY);
+      overlayCtx.fillText(faceInstruction, centerX, centerY + 30);
     }
   }
 
@@ -629,23 +697,23 @@
       3: "Turn your face slightly to the LEFT"
     };
 
-    const MAX_RETRIES = 5; // Max retries per step
+    const MAX_ATTEMPTS = 30; // Max attempts per step (about 6 seconds at 200ms intervals)
+    const CHECK_INTERVAL = 200; // Check every 200ms for responsive capture
 
     for (let step = 1; step <= 3; step++) {
       faceStep = step;
       let captured = false;
-      let retries = 0;
+      let attempts = 0;
 
-      while (!captured && retries < MAX_RETRIES) {
-        console.log(`🟢 Step ${step}: ${instructions[step]} (attempt ${retries + 1}/${MAX_RETRIES})`);
+      console.log(`🟢 Step ${step}: ${instructions[step]}`);
+
+      while (!captured && attempts < MAX_ATTEMPTS) {
+        attempts++;
         
-        // Brief pause before capture
-        await new Promise(res => setTimeout(res, 800));
-        
-        // Capture frame
+        // Capture frame FIRST (real-time)
         const frame = takeSnapshot();
         
-        // Verify face is detected using /api/check-face
+        // Immediately verify face is detected
         try {
           const res = await fetch(`${SERVER_URL}/check-face`, {
             method: "POST",
@@ -655,39 +723,38 @@
           const { orientation } = await res.json();
           
           if (orientation !== 'none') {
-            // Face detected! Save this frame
+            // Face detected! Save THIS EXACT frame (no delay)
             capturedImages[`pic${step}`] = frame;
-            console.log(`✅ Step ${step}: Face detected (${orientation}), captured!`);
+            console.log(`✅ Step ${step}: Face detected (${orientation}), captured immediately!`);
             captured = true;
+            
+            // Show success feedback briefly
+            await new Promise(res => setTimeout(res, 500));
           } else {
-            // No face detected, retry
-            retries++;
-            console.log(`⚠️ Step ${step}: No face detected, retrying... (${retries}/${MAX_RETRIES})`);
-            if (retries < MAX_RETRIES) {
-              await new Promise(res => setTimeout(res, 500)); // Short delay before retry
-            }
+            // No face detected, wait briefly and try again
+            await new Promise(res => setTimeout(res, CHECK_INTERVAL));
           }
         } catch (err) {
           console.error("Check-face error:", err);
-          retries++;
+          await new Promise(res => setTimeout(res, CHECK_INTERVAL));
         }
       }
 
       if (!captured) {
-        // Max retries reached, capture anyway and let server handle it
+        // Max attempts reached, capture current frame anyway
         const frame = takeSnapshot();
         capturedImages[`pic${step}`] = frame;
-        console.log(`⚠️ Step ${step}: Max retries reached, capturing anyway`);
+        console.log(`⚠️ Step ${step}: Timeout, capturing current frame`);
       }
 
-      // Brief pause before next step
+      // Brief pause before next step instruction
       if (step < 3) {
-        await new Promise(res => setTimeout(res, 1000));
+        await new Promise(res => setTimeout(res, 800));
       }
     }
 
     faceStep = 4; // Mark as complete
-    console.log("📸 All 3 images captured with face verification");
+    console.log("📸 All 3 images captured with real-time face verification");
     
     // After all 3 captured → register
     await saveData();
@@ -1240,7 +1307,7 @@
 
           <div class="face-content">
             <div class="camera-container">
-              <video bind:this={video} autoplay muted playsinline class="face-video"></video>
+              <video bind:this={video} autoplay muted playsinline class="face-video" width="1024" height="600"></video>
               <canvas bind:this={canvas} style="display:none"></canvas>
 
               <div class="face-instruction">
@@ -1263,9 +1330,9 @@
                   {#if faceStep === 1}
                     Look straight ahead
                   {:else if faceStep === 2}
-                    Turn your face to the RIGHT
-                  {:else if faceStep === 3}
                     Turn your face to the LEFT
+                  {:else if faceStep === 3}
+                    Turn your face to the RIGHT
                   {:else}
                     Processing complete!
                   {/if}
@@ -2068,9 +2135,24 @@
   }
 
   /* 🎨 Form Containers */
-  .form-container, .face-container, .login-container, .auth-form-container, .settings-container {
+  .form-container, .login-container, .auth-form-container, .settings-container {
     width: 100%;
     max-width: 500px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 1.5rem;
+    padding: 2rem;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+    color: #0f172a; /* dark text for readability on light/white backgrounds */
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .face-container {
+    width: 100%;
+    max-width: 1100px; /* Larger to accommodate 1024px video */
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -2258,9 +2340,8 @@
   }
 
   .face-video {
-    width: 100%;
-    max-width: 400px;
-    height: auto;
+    width: 640px;
+    height: 640px;
     border-radius: 1rem;
     border: 2px solid rgba(255, 255, 255, 0.2);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
@@ -2271,8 +2352,8 @@
   .face-instruction {
     position: absolute;
     top: 1rem;
-    left: 1rem;
-    right: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
     border-radius: 0.75rem;
@@ -2280,6 +2361,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    max-width: 90%; /* Prevent overflow on smaller screens */
   }
 
   .instruction-icon {
