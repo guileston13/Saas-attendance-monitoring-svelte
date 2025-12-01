@@ -1,0 +1,85 @@
+# Node.js
+node_modules/
+dist/
+.build/
+.env
+.env.*
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+w600k_r50.onnx
+# SvelteKit
+.svelte-kit/
+
+# Vite
+.vite/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.superdesign/
+
+# Python virtual environments
+.venv/
+venv/
+
+# Ignore documentation and SQL files
+*.md
+*.sql
+!school_management.sql
+
+# Misc
+coverage/
+
+# Custom ignores
+optimization_complete.txt
+
+# -------------------------
+# Python & model artifacts
+# -------------------------
+# Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Caches and test artifacts
+.pytest_cache/
+.mypy_cache/
+.cache/
+toil/
+
+# Build / dist
+build/
+dist/
+
+# InsightFace / ArcFace / RetinaFace model files and caches
+# (ignore downloaded ONNX / model binaries produced by arcface/retinaface/insightface)
+models/*.pt
+models/*.pb
+models/*.bin
+models/*.npy
+models/cache/
+.insightface/
+.insightface_cache/
+.cache/insightface/
+
+# If you intentionally track some model files inside `models/`, they will remain tracked.
+# These ignore rules only prevent committing newly downloaded large model binaries (e.g., det_10g.onnx, w600k_r50.onnx).
+
