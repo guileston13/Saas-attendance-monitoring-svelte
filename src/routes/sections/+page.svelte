@@ -29,6 +29,8 @@
 	let searching = false;
 	let selecting = false;
 	let enrolling = false;
+	let enrollmentMessage = "";
+	let enrollmentMessageType = "info";
 
 	let searchTerm = "";
 	let isLoading = true;
@@ -239,13 +241,17 @@
 	}
 
 	async function handleEnrollStudents() {
+		enrollmentMessage = "";
+		enrollmentMessageType = "info";
 		if (selectedStudents.size === 0) {
-			alert("Please select at least one student to enroll");
+			enrollmentMessage = "Please select at least one student to enroll.";
+			enrollmentMessageType = "error";
 			return;
 		}
 
 		if (!selectedSubject) {
-			alert("Please select a subject");
+			enrollmentMessage = "Please select a subject.";
+			enrollmentMessageType = "error";
 			return;
 		}
 
@@ -266,18 +272,64 @@
 			});
 
 			const result = await response.json();
+			console.log("Enrollment result:", result);
 
 			if (result.type === "success") {
 				selectedStudents.clear();
 				selectedCount = 0;
 				await loadEnrolledStudents();
 				await invalidateAll();
+				
+				// Parse the message from various possible response formats
+				let message = "";
+				if (typeof result.data === "string") {
+					// Try to parse if it's a JSON string
+					try {
+						const parsed = JSON.parse(result.data);
+						// Handle array format like [obj, "success", {message: idx}, "actual message"]
+						if (Array.isArray(parsed) && parsed.length >= 4) {
+							message = parsed[3] || parsed[parsed.length - 1];
+						} else if (parsed.message) {
+							message = parsed.message;
+						}
+					} catch {
+						message = result.data;
+					}
+				} else if (result.data?.message) {
+					message = result.data.message;
+				}
+				
+				if (message) {
+					enrollmentMessage = message;
+					enrollmentMessageType = message.includes("failed") ? "warning" : "success";
+				} else {
+					enrollmentMessage = "Enrollment completed.";
+					enrollmentMessageType = "success";
+				}
 			} else {
-				alert(result.data?.error || "Failed to enroll students");
+				// Handle error response
+				let errorMsg = "Failed to enroll students.";
+				if (typeof result.data === "string") {
+					try {
+						const parsed = JSON.parse(result.data);
+						if (Array.isArray(parsed) && parsed.length >= 4) {
+							errorMsg = parsed[3] || parsed[parsed.length - 1];
+						} else if (parsed.error) {
+							errorMsg = parsed.error;
+						}
+					} catch {
+						errorMsg = result.data;
+					}
+				} else if (result.data?.error) {
+					errorMsg = result.data.error;
+				}
+				enrollmentMessage = errorMsg;
+				enrollmentMessageType = "error";
 			}
 		} catch (error) {
 			console.error("Enrollment error:", error);
-			alert("An error occurred while enrolling students");
+			enrollmentMessage = "An error occurred while enrolling students.";
+			enrollmentMessageType = "error";
 		} finally {
 			enrolling = false;
 		}
@@ -1455,6 +1507,12 @@
 				>
 			</div>
 
+			{#if enrollmentMessage}
+            <div class="enrollment-message-box {enrollmentMessageType}">
+                <span>{enrollmentMessage}</span>
+            </div>
+            {/if}
+
 			<div class="modal-body-split">
 				<!-- Search Bar -->
 				<div class="search-section">
@@ -1814,7 +1872,6 @@
 		</div>
 	</div>
 {/if}
-```
 
 <style>
 	
@@ -2090,27 +2147,70 @@
 		background: #3b82f6;
 		top: 20%;
 		left: 10%;
+		animation: float-8s 8s ease-in-out infinite;
 	}
+
 	.orb-2 {
 		width: 200px;
 		height: 200px;
 		background: #a855f7;
 		bottom: 20%;
 		right: 10%;
+		animation: float-10s-reverse 10s ease-in-out infinite;
 	}
+
 	.orb-3 {
 		width: 120px;
 		height: 120px;
 		background: #22c55e;
 		top: 50%;
 		left: 50%;
+		animation: float-12s 12s ease-in-out infinite;
 	}
-	.orb-4 {
-		width: 180px;
-		height: 180px;
-		background: #f97316;
-		bottom: 30%;
-		left: 20%;
+
+	@keyframes float-8s {
+		0%,
+		100% {
+			transform: translate(0, 0);
+		}
+		25% {
+			transform: translate(30px, -30px);
+		}
+		50% {
+			transform: translate(0, -40px);
+		}
+		75% {
+			transform: translate(-30px, -20px);
+		}
+	}
+
+	@keyframes float-10s-reverse {
+		0%,
+		100% {
+			transform: translate(0, 0);
+		}
+		25% {
+			transform: translate(-30px, 30px);
+		}
+		50% {
+			transform: translate(0, 40px);
+		}
+		75% {
+			transform: translate(30px, 20px);
+		}
+	}
+
+	@keyframes float-12s {
+		0%,
+		100% {
+			transform: translate(0, 0);
+		}
+		33% {
+			transform: translate(20px, -40px);
+		}
+		66% {
+			transform: translate(-20px, 20px);
+		}
 	}
 
 	/* ===== ANIMATED BACKGROUND ===== */
@@ -2274,6 +2374,7 @@
 		background: linear-gradient(135deg, #3b82f6, #a855f7);
 		border-radius: 16px;
 		flex-shrink: 0;
+
 		animation: pulse-slow 3s ease-in-out infinite;
 	}
 
@@ -3659,161 +3760,6 @@
 		}
 	}
 
-	.subject-schedule {
-		font-size: 12px;
-		color: #22c55e;
-		margin-top: 4px;
-	}
-
-	.subject-days {
-		font-size: 12px;
-		color: #a855f7;
-		margin-top: 4px;
-		font-weight: 600;
-	}
-
-	.readonly-field {
-		padding: 12px 16px;
-		background: rgba(255, 255, 255, 0.3);
-		border: 1px solid rgba(255, 255, 255, 0.3);
-		border-radius: 8px;
-		font-size: 14px;
-		color: #1e293b;
-		font-weight: 500;
-	}
-
-	/* ===== EMPTY STATE ===== */
-	.empty-state {
-		padding: 60px 20px;
-		text-align: center;
-		grid-column: 1 / -1;
-	}
-
-	.empty-state h3 {
-		margin: 0 0 8px 0;
-		font-size: 18px;
-		font-weight: 600;
-		color: #1e293b;
-	}
-
-	.empty-state p {
-		margin: 0;
-		font-size: 14px;
-		color: #64748b;
-	}
-
-	/* ===== RESPONSIVE DESIGN ===== */
-	@media (max-width: 768px) {
-		.sections-page {
-			padding: 20px 16px;
-		}
-
-		.page-header {
-			flex-direction: column;
-			text-align: center;
-			padding: 20px 16px;
-		}
-
-		.header-content h1 {
-			font-size: 24px;
-		}
-
-		.stats-grid {
-			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-			gap: 16px;
-		}
-
-		.modal-content {
-			max-width: 90%;
-		}
-
-		.card-actions {
-			flex-direction: column;
-		}
-
-		.btn {
-			width: 100%;
-		}
-	}
-
-	@media (max-width: 480px) {
-		.loading-brand .brand-main {
-			font-size: 22px;
-		}
-
-		.page-header {
-			padding: 16px 12px;
-		}
-
-		.header-content h1 {
-			font-size: 20px;
-		}
-
-		.stats-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.sections-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.modal-content {
-			padding: 20px;
-		}
-
-		.split-container {
-			grid-template-columns: 1fr;
-			min-height: 400px;
-		}
-
-		.modal-extra-large {
-			max-width: 95%;
-		}
-
-		.modal-header-content {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 12px;
-		}
-
-		.enrollment-stats {
-			width: 100%;
-			justify-content: space-around;
-		}
-
-		.panel-body {
-			padding: 12px;
-		}
-
-		.student-card {
-			padding: 10px;
-		}
-
-		.student-avatar {
-			width: 36px;
-			height: 36px;
-			font-size: 12px;
-		}
-
-		.footer-actions {
-			flex-direction: column;
-			width: 100%;
-		}
-
-		.footer-actions .btn {
-			width: 100%;
-		}
-	}
-
-	/* ===== ACCESSIBILITY ===== */
-	@media (prefers-reduced-motion: reduce) {
-		* {
-			animation-duration: 0.01ms !important;
-			animation-iteration-count: 1 !important;
-			transition-duration: 0.01ms !important;
-		}
-	}
-
 	@media (prefers-color-scheme: dark) {
 		.loading-screen {
 			background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -3956,4 +3902,38 @@
 		}
 	}
 
+	.enrollment-message-box {
+    margin: 1rem 0;
+    padding: 0.75rem 1.25rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    background: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #d1d5db;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.enrollment-message-box.error {
+    background: #ffeaea;
+    color: #c0392b;
+    border-color: #e74c3c;
+}
+.enrollment-message-box.info {
+    background: #eaf6ff;
+    color: #2980b9;
+    border-color: #3498db;
+}
+.enrollment-message-box.warning {
+    background: #fff8e6;
+    color: #d68910;
+    border-color: #f39c12;
+}
+.enrollment-message-box.success {
+    background: #e8f8f0;
+    color: #27ae60;
+    border-color: #2ecc71;
+}
 </style>

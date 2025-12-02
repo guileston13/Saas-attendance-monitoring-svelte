@@ -89,7 +89,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, ['Admin', 'Teacher'])) {
-			return { success: false, error: 'Unauthorized' };
+			return { type: 'error', error: 'Unauthorized' };
 		}
 
 		try {
@@ -98,7 +98,7 @@ export const actions = {
 			const statusId = data.get('statusId') || 1;
 
 			if (!sectionName) {
-				return { success: false, error: 'Section name is required' };
+				return { type: 'error', error: 'Section name is required' };
 			}
 
 			// Create the section
@@ -123,10 +123,10 @@ export const actions = {
 			
 			console.log(`[createSection] Successfully added ${addedCount}/${allSubjects.length} subjects to section ${newSectionId}`);
 
-			return { success: true, sectionId: newSectionId };
+			return { type: 'success', data: { sectionId: newSectionId, sectionName } };
 		} catch (error) {
 			console.error('Create section error:', error);
-			return { success: false, error: 'Failed to create section' };
+			return { type: 'error', error: 'Failed to create section' };
 		}
 	},
 
@@ -134,7 +134,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
-			return { success: false, error: 'Unauthorized' };
+			return { type: 'error', error: 'Unauthorized' };
 		}
 
 		try {
@@ -144,14 +144,14 @@ export const actions = {
 			const statusId = data.get('statusId');
 
 			if (!sectionId || !sectionName) {
-				return { success: false, error: 'Section ID and name are required' };
+				return { type: 'error', error: 'Section ID and name are required' };
 			}
 
 			await updateSection(sectionId, { sectionName, statusId });
-			return { success: true };
+			return { type: 'success' };
 		} catch (error) {
 			console.error('Update section error:', error);
-			return { success: false, error: 'Failed to update section' };
+			return { type: 'error', error: 'Failed to update section' };
 		}
 	},
 
@@ -159,7 +159,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
-			return { success: false, error: 'Unauthorized' };
+			return { type: 'error', error: 'Unauthorized' };
 		}
 
 		try {
@@ -167,14 +167,14 @@ export const actions = {
 			const sectionId = parseInt(data.get('sectionId'));
 
 			if (!sectionId) {
-				return { success: false, error: 'Section ID is required' };
+				return { type: 'error', error: 'Section ID is required' };
 			}
 
 			await deleteSection(sectionId);
-			return { success: true };
+			return { type: 'success' };
 		} catch (error) {
 			console.error('Delete section error:', error);
-			return { success: false, error: 'Failed to delete section' };
+			return { type: 'error', error: 'Failed to delete section' };
 		}
 	},
 
@@ -182,7 +182,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
-			return { success: false, error: 'Unauthorized' };
+			return { type: 'error', error: 'Unauthorized' };
 		}
 
 		try {
@@ -199,44 +199,59 @@ export const actions = {
 			const thursday = data.get('thursday') === 'on' ? 1 : 0;
 			const friday = data.get('friday') === 'on' ? 1 : 0;
 
-			// Parse per-day schedule with teachers
+			// Parse per-day schedule with teachers and rooms
 			const schedule = {
 				monday: { 
 					start: data.get('mondayStart') || null, 
 					end: data.get('mondayEnd') || null,
-					teacher: data.get('mondayTeacher') || null
+					teacher: data.get('mondayTeacher') || null,
+					room: data.get('mondayRoom') || null
 				},
 				tuesday: { 
 					start: data.get('tuesdayStart') || null, 
 					end: data.get('tuesdayEnd') || null,
-					teacher: data.get('tuesdayTeacher') || null
+					teacher: data.get('tuesdayTeacher') || null,
+					room: data.get('tuesdayRoom') || null
 				},
 				wednesday: { 
 					start: data.get('wednesdayStart') || null, 
 					end: data.get('wednesdayEnd') || null,
-					teacher: data.get('wednesdayTeacher') || null
+					teacher: data.get('wednesdayTeacher') || null,
+					room: data.get('wednesdayRoom') || null
 				},
 				thursday: { 
 					start: data.get('thursdayStart') || null, 
 					end: data.get('thursdayEnd') || null,
-					teacher: data.get('thursdayTeacher') || null
+					teacher: data.get('thursdayTeacher') || null,
+					room: data.get('thursdayRoom') || null
 				},
 				friday: { 
 					start: data.get('fridayStart') || null, 
 					end: data.get('fridayEnd') || null,
-					teacher: data.get('fridayTeacher') || null
+					teacher: data.get('fridayTeacher') || null,
+					room: data.get('fridayRoom') || null
 				}
 			};
 
 			if (!sectionId || !subjectId) {
-				return { success: false, error: 'Section ID and Subject ID are required' };
+				return { type: 'error', error: 'Section ID and Subject ID are required' };
 			}
 
 			await addSubjectToSection(sectionId, subjectId, teacherId, roomId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, schedule);
-			return { success: true };
+			return { type: 'success' };
 		} catch (error) {
 			console.error('Add subject error:', error);
-			return { success: false, error: 'Failed to add subject' };
+			console.error('Add subject error details:', {
+				message: error.message,
+				code: error.code,
+				errno: error.errno,
+				sqlMessage: error.sqlMessage
+			});
+			// Return more specific error message
+			if (error.code === 'ER_DUP_ENTRY') {
+				return { type: 'error', error: 'This subject is already added to this section' };
+			}
+			return { type: 'error', error: 'Failed to add subject: ' + (error.sqlMessage || error.message) };
 		}
 	},
 
@@ -244,7 +259,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
-			return { success: false, error: 'Unauthorized' };
+			return { type: 'error', error: 'Unauthorized' };
 		}
 
 		try {
@@ -261,45 +276,50 @@ export const actions = {
 			const thursday = data.get('thursday') === 'on' ? 1 : 0;
 			const friday = data.get('friday') === 'on' ? 1 : 0;
 
-			// Parse per-day schedule with teachers
+			// Parse per-day schedule with teachers and rooms
 			const schedule = {
 				monday: { 
 					start: data.get('mondayStart') || null, 
 					end: data.get('mondayEnd') || null,
-					teacher: data.get('mondayTeacher') || null
+					teacher: data.get('mondayTeacher') || null,
+					room: data.get('mondayRoom') || null
 				},
 				tuesday: { 
 					start: data.get('tuesdayStart') || null, 
 					end: data.get('tuesdayEnd') || null,
-					teacher: data.get('tuesdayTeacher') || null
+					teacher: data.get('tuesdayTeacher') || null,
+					room: data.get('tuesdayRoom') || null
 				},
 				wednesday: { 
 					start: data.get('wednesdayStart') || null, 
 					end: data.get('wednesdayEnd') || null,
-					teacher: data.get('wednesdayTeacher') || null
+					teacher: data.get('wednesdayTeacher') || null,
+					room: data.get('wednesdayRoom') || null
 				},
 				thursday: { 
 					start: data.get('thursdayStart') || null, 
 					end: data.get('thursdayEnd') || null,
-					teacher: data.get('thursdayTeacher') || null
+					teacher: data.get('thursdayTeacher') || null,
+					room: data.get('thursdayRoom') || null
 				},
 				friday: { 
 					start: data.get('fridayStart') || null, 
 					end: data.get('fridayEnd') || null,
-					teacher: data.get('fridayTeacher') || null
+					teacher: data.get('fridayTeacher') || null,
+					room: data.get('fridayRoom') || null
 				}
 			};
 
 			if (!sectionId || !subjectId) {
-				return { success: false, error: 'Section ID and Subject ID are required' };
+				return { type: 'error', error: 'Section ID and Subject ID are required' };
 			}
 
 			const { updateSectionSubject } = await import('../../services/sectionService.js');
 			await updateSectionSubject(sectionId, subjectId, teacherId, roomId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, schedule);
-			return { success: true };
+			return { type: 'success' };
 		} catch (error) {
 			console.error('Update section subject error:', error);
-			return { success: false, error: 'Failed to update subject' };
+			return { type: 'error', error: 'Failed to update subject' };
 		}
 	},
 
@@ -307,7 +327,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
-			return { success: false, error: 'Unauthorized' };
+			return { type: 'error', error: 'Unauthorized' };
 		}
 
 		try {
@@ -317,7 +337,7 @@ export const actions = {
 			const studentIds = data.get('studentIds');
 
 			if (!sectionId || !subjectId || !studentIds) {
-				return { success: false, error: 'Section ID, Subject ID, and student IDs are required' };
+				return { type: 'error', error: 'Section ID, Subject ID, and student IDs are required' };
 			}
 
 			const studentIdArray = JSON.parse(studentIds);
@@ -339,12 +359,14 @@ export const actions = {
 			}
 
 			return {
-				success: true,
-				message: `Successfully enrolled ${successCount} student(s)${failCount > 0 ? `, ${failCount} failed (may already be enrolled)` : ''}`
+				type: 'success',
+				data: {
+					message: `Successfully enrolled ${successCount} student(s)${failCount > 0 ? `, ${failCount} failed (may already be enrolled)` : ''}`
+				}
 			};
 		} catch (error) {
 			console.error('Enroll students error:', error);
-			return { success: false, error: 'Failed to enroll students' };
+			return { type: 'error', error: 'Failed to enroll students' };
 		}
 	},
 
@@ -352,7 +374,7 @@ export const actions = {
 		const session = getSessionFromCookies(request.headers.get('cookie'));
 
 		if (!isAuthenticated(session) || !hasRole(session, 'Admin')) {
-			return { success: false, error: 'Unauthorized' };
+			return { type: 'error', error: 'Unauthorized' };
 		}
 
 		try {
@@ -362,7 +384,7 @@ export const actions = {
 			const studentId = data.get('studentId');
 
 			if (!sectionId || !subjectId || !studentId) {
-				return { success: false, error: 'Section ID, Subject ID, and student ID are required' };
+				return { type: 'error', error: 'Section ID, Subject ID, and student ID are required' };
 			}
 
 			// Import the unenrollment function
@@ -370,10 +392,10 @@ export const actions = {
 
 			await unenrollStudentFromSubject(sectionId, subjectId, studentId);
 
-			return { success: true, message: 'Student unenrolled successfully' };
+			return { type: 'success', data: { message: 'Student unenrolled successfully' } };
 		} catch (error) {
 			console.error('Unenroll student error:', error);
-			return { success: false, error: 'Failed to unenroll student' };
+			return { type: 'error', error: 'Failed to unenroll student' };
 		}
 	}
 };
