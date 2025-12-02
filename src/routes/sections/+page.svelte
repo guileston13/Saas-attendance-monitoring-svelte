@@ -664,6 +664,29 @@
 								</button>
 								<button
 									type="button"
+									class="btn btn-success"
+									on:click={(e) => {
+										e.stopPropagation();
+										selectSectionItem(section.SectionID);
+										openSubjectModal();
+									}}
+								>
+									<svg
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											d="M12 5v14M5 12h14"
+										></path>
+									</svg>
+									Add Subject
+								</button>
+								<button
+									type="button"
 									class="btn btn-primary"
 									on:click={(e) =>
 										handleEnrollClick(e, section.SectionID)}
@@ -2695,6 +2718,21 @@
 	}
 
 	.btn-danger:active {
+		transform: translateY(0);
+	}
+
+	.btn-success {
+		background: linear-gradient(135deg, #22c55e, #16a34a);
+		color: white;
+		box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+	}
+
+	.btn-success:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+	}
+
+	.btn-success:active {
 		transform: translateY(0);
 	}
 

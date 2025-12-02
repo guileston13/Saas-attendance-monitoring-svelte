@@ -299,10 +299,22 @@
 		const tableBody = headerRows.concat([tableHeaders, dateHeaders]);
 
 		// Filter students to only include those with valid attendance (P, A, L) and no blank statuses
-		const validStudents = students.filter(studentData => {
-			const attendance = studentData.attendance;
-			return Object.values(attendance).every(record => !record || ['P', 'A', 'L'].includes(record.displayStatus));
-		});
+		const validStudents = students
+			.filter(studentData => {
+				const attendance = studentData.attendance;
+				return Object.values(attendance).every(record => !record || ['P', 'A', 'L'].includes(record.displayStatus));
+			})
+			// Sort by last name alphabetically
+			.sort((a, b) => {
+				const lastNameA = (a.student.LastName || '').toLowerCase();
+				const lastNameB = (b.student.LastName || '').toLowerCase();
+				if (lastNameA < lastNameB) return -1;
+				if (lastNameA > lastNameB) return 1;
+				// If last names are equal, sort by first name
+				const firstNameA = (a.student.FirstName || '').toLowerCase();
+				const firstNameB = (b.student.FirstName || '').toLowerCase();
+				return firstNameA.localeCompare(firstNameB);
+			});
 
 		// Add student rows
 		validStudents.forEach((studentData, index) => {
