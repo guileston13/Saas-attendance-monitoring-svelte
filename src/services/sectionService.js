@@ -269,9 +269,28 @@ export async function removeSubjectFromSection(sectionId, subjectId) {
  * @param {number} sectionId - Section ID
  * @param {number} subjectId - Subject ID
  * @param {string} studentId - Student ID
- * @returns {Promise<Object>} Result
+ * @returns {Promise<Object>} Result with success status and message
  */
 export async function enrollStudentInSubject(sectionId, subjectId, studentId) {
+    // Check if student is already enrolled in this subject in ANY section
+    const existingEnrollment = await executeQuery(`
+        SELECT se.SectionID, s.SectionName 
+        FROM subject_enrollments se
+        JOIN sections s ON se.SectionID = s.SectionID
+        WHERE se.SubjectID = ? AND se.StudentID = ? AND se.Status = 'Active'
+    `, [subjectId, studentId]);
+
+    if (existingEnrollment.length > 0) {
+        const existingSection = existingEnrollment[0];
+        if (existingSection.SectionID === sectionId) {
+            // Already enrolled in this exact section/subject combination
+            throw new Error(`Student is already enrolled in this subject in this section`);
+        } else {
+            // Enrolled in a different section for the same subject
+            throw new Error(`Student is already enrolled in this subject in section "${existingSection.SectionName}"`);
+        }
+    }
+
     const result = await executeQuery(`
         INSERT INTO subject_enrollments (SectionID, SubjectID, StudentID, Status) 
         VALUES (?, ?, ?, 'Active')

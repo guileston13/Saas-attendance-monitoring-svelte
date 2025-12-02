@@ -347,6 +347,7 @@ export const actions = {
 
 			let successCount = 0;
 			let failCount = 0;
+			let failReasons = [];
 
 			for (const studentId of studentIdArray) {
 				try {
@@ -355,13 +356,30 @@ export const actions = {
 				} catch (error) {
 					console.warn(`Student ${studentId} enrollment failed:`, error.message);
 					failCount++;
+					// Collect unique failure reasons
+					if (!failReasons.includes(error.message)) {
+						failReasons.push(error.message);
+					}
 				}
+			}
+
+			// Build a more descriptive message
+			let message = '';
+			if (successCount > 0 && failCount === 0) {
+				message = `Successfully enrolled ${successCount} student(s)`;
+			} else if (successCount > 0 && failCount > 0) {
+				message = `Enrolled ${successCount} student(s). ${failCount} failed: ${failReasons.join('; ')}`;
+			} else if (successCount === 0 && failCount > 0) {
+				message = `Failed to enroll ${failCount} student(s): ${failReasons.join('; ')}`;
 			}
 
 			return {
 				type: 'success',
 				data: {
-					message: `Successfully enrolled ${successCount} student(s)${failCount > 0 ? `, ${failCount} failed (may already be enrolled)` : ''}`
+					message,
+					successCount,
+					failCount,
+					failReasons
 				}
 			};
 		} catch (error) {
