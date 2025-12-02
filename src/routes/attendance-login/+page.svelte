@@ -883,7 +883,7 @@
       consecutiveFailures = 0;
       lastDetectionTime = 0;
       lastSuccessTime = Date.now();
-      currentDetectionInterval = 2000;
+      currentDetectionInterval = 1000;
 
       if (detectionInterval) clearInterval(detectionInterval);
       // 🎯 Start with 2 second interval (4x better than 500ms)
