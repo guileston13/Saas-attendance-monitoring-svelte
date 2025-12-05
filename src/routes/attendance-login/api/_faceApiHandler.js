@@ -14,10 +14,46 @@ const FACE_DIR = path.join(PROJECT_ROOT, 'static', 'face');
 const DESC_DIR = path.join(PROJECT_ROOT, 'static', 'descriptors');
 // Load models from the static assets directory so both client and server use the same files
 const MODEL_PATH = path.join(PROJECT_ROOT, 'static', 'models');
+const LOGS_FILE = path.join(PROJECT_ROOT, 'logs.txt');
 
 if (!fs.existsSync(FACE_DIR)) fs.mkdirSync(FACE_DIR, { recursive: true });
 if (!fs.existsSync(DESC_DIR)) fs.mkdirSync(DESC_DIR, { recursive: true });
 if (!fs.existsSync(MODEL_PATH)) fs.mkdirSync(MODEL_PATH, { recursive: true });
+
+/**
+ * Log attendance record to logs.txt (new entries at top)
+ * @param {Object} record - Attendance record data
+ * @param {string} action - 'INSERT' or 'UPDATE'
+ */
+function logAttendanceRecord(record, action = 'INSERT') {
+  try {
+    const { id, student_id, subject_id, class_subject_id, section_id, attendance_date, login_time, status, recorded_by, recorded_at } = record;
+    
+    // Format the log entry (tab-separated like the existing format)
+    const logEntry = `${id || ''}\t${student_id}\t${subject_id}\t${class_subject_id || ''}\t${section_id}\t${attendance_date}\t${login_time || ''}\t${status || ''}\t${recorded_by}\t${recorded_at}`;
+    
+    // Read existing content
+    let existingContent = '';
+    let header = 'id\tstudent_id\tsubject_id\tclass_subject_id\tsection_id\tattendance_date\tlogin_time\tstatus\trecorded_by\trecorded_at';
+    
+    if (fs.existsSync(LOGS_FILE)) {
+      existingContent = fs.readFileSync(LOGS_FILE, 'utf-8');
+      const lines = existingContent.split('\n');
+      if (lines.length > 0 && lines[0].includes('student_id')) {
+        header = lines[0];
+        existingContent = lines.slice(1).join('\n');
+      }
+    }
+    
+    // Prepend new entry (after header)
+    const newContent = `${header}\n${logEntry}\n${existingContent}`.trim() + '\n';
+    
+    fs.writeFileSync(LOGS_FILE, newContent, 'utf-8');
+    console.log(`📝 [${action}] Logged attendance for student ${student_id}`);
+  } catch (error) {
+    console.error('⚠️ Failed to write to logs.txt:', error.message);
+  }
+}
 
 let modelsLoaded = false;
 async function ensureModelsLoaded() {
@@ -685,7 +721,39 @@ export async function recordAttendance(studentId, subjectId, sectionId, teacherI
         recorded_at = CURRENT_TIMESTAMP
     `;
 
-    await executeQuery(query, [studentId, subId, secId, today, loginTime, status, teachId]);
+    const result = await executeQuery(query, [studentId, subId, secId, today, loginTime, status, teachId]);
+    
+    // Determine if it was INSERT or UPDATE based on affectedRows
+    // affectedRows = 1 means INSERT, affectedRows = 2 means UPDATE (with ON DUPLICATE KEY)
+    const action = result.affectedRows === 1 ? 'INSERT' : 'UPDATE';
+    
+    // Get the record ID (insertId for new records, or query for updated records)
+    let recordId = result.insertId;
+    if (!recordId || recordId === 0) {
+      // It was an update, fetch the existing record ID
+      const existingRecord = await executeQuery(
+        `SELECT id FROM attendance_records WHERE student_id = ? AND subject_id = ? AND section_id = ? AND attendance_date = ?`,
+        [studentId, subId, secId, today]
+      );
+      if (existingRecord.length > 0) {
+        recordId = existingRecord[0].id;
+      }
+    }
+    
+    // Log to logs.txt
+    const nowTimestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    logAttendanceRecord({
+      id: recordId,
+      student_id: studentId,
+      subject_id: subId,
+      class_subject_id: null,
+      section_id: secId,
+      attendance_date: today,
+      login_time: loginTime,
+      status: status,
+      recorded_by: teachId,
+      recorded_at: nowTimestamp
+    }, action);
 
     console.log(`✅ Attendance recorded for student ${studentId} at ${loginTime} - Status: ${status}`);
     return { success: true, loginTime, status };
