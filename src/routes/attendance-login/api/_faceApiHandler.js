@@ -458,7 +458,10 @@ export async function handleRegister(request) {
 export async function handleLoginRecognize(request) {
   await ensureModelsLoaded();
   try {
-    const { image, roomId } = await request.json();
+    const { image, roomId, deviceSessionId } = await request.json();
+    
+    // 🔧 DEBUG: Log incoming request info
+    console.log(`📡 Recognition request from device: ${deviceSessionId || 'unknown'}, roomId: ${roomId}`);
     
     if (!image) {
       return new Response(JSON.stringify({ message: '❌ No image provided' }), {

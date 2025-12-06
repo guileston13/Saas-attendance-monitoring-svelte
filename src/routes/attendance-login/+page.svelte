@@ -52,6 +52,10 @@
   let loginMessageColor = "black";
   let detectionInterval;
   let loginImageUrl = "";
+  
+  // 🔧 Camera state guard - prevent multiple simultaneous starts
+  let isCameraActive = false;
+  let isCameraStarting = false;
 
   // 🎯 Smart detection optimization variables
   let isDetectionPending = false;          // Prevent request queue buildup
@@ -69,14 +73,33 @@
   let roomId = "";
   let SERVER_URL = "/attendance-login/api";
   let roomList = [];
+  
+  // 🔧 Unique device session ID - persisted in localStorage
+  let deviceSessionId = "";
+  
+  // Generate unique device ID if not exists
+  function getOrCreateDeviceId() {
+    let storedId = localStorage.getItem("deviceSessionId");
+    if (!storedId) {
+      storedId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem("deviceSessionId", storedId);
+    }
+    return storedId;
+  }
 
   let eventSource;
 
   // 🎨 Loading animation sequence
   onMount(async () => {
+    // 🔧 Initialize unique device session ID
+    deviceSessionId = getOrCreateDeviceId();
+    console.log(`🔧 Device Session ID: ${deviceSessionId}`);
+    
     // Load settings from localStorage
     roomId = localStorage.getItem("roomId") || "";
     SERVER_URL = localStorage.getItem("SERVER_URL") || "/attendance-login/api";
+    
+    console.log(`🏠 Room ID: ${roomId} | Device: ${deviceSessionId}`);
 
     // Simulate loading sequence
     const loadingSteps = [
@@ -142,10 +165,16 @@
         // If roomId is not set, default to first room
         if (!roomId && roomList.length > 0) {
           roomId = roomList[0].RoomID;
+          localStorage.setItem("roomId", roomId);
         }
       }
     } catch (e) {
       console.error("Failed to fetch rooms", e);
+    }
+    
+    // 🔧 Ensure deviceSessionId is set before SSE
+    if (!deviceSessionId) {
+      deviceSessionId = getOrCreateDeviceId();
     }
 
     eventSource = new EventSource("/api/stream");
@@ -153,21 +182,32 @@
       console.log("📡 SSE message received:", event.data);
       try {
         const data = JSON.parse(event.data);
-        const myDevice = `device${roomId}`;
         
-        // Only react if message is for this device or for "all"
-        if (data.device && data.device !== myDevice && data.device !== 'all') {
-          console.log(`📡 Ignoring SSE for ${data.device} (I am ${myDevice})`);
-          return;
+        // 🔧 IMPROVED: Use both roomId AND deviceSessionId for filtering
+        const myRoomDevice = `room${roomId}`;
+        const mySessionDevice = deviceSessionId;
+        
+        // Only react if message is for this device's room, session, or "all"
+        if (data.device) {
+          const targetDevice = data.device;
+          const isForMe = targetDevice === 'all' || 
+                          targetDevice === myRoomDevice || 
+                          targetDevice === mySessionDevice ||
+                          targetDevice === `device${roomId}`; // Legacy support
+          
+          if (!isForMe) {
+            console.log(`📡 Ignoring SSE for ${targetDevice} (I am room:${roomId}, session:${deviceSessionId})`);
+            return;
+          }
         }
 
         if (data.status === "camera_started") {
-          console.log(`🎥 Camera started for ${myDevice}!`);
+          console.log(`🎥 Camera started for room ${roomId}!`);
           startLoginCamera();
         }
 
         if (data.status === "camera_stopped") {
-          console.log(`🛑 Camera stopped for ${myDevice}!`);
+          console.log(`🛑 Camera stopped for room ${roomId}!`);
           stopLoginCamera();
         }
       } catch (err) {
@@ -183,6 +223,8 @@
   onDestroy(() => {
     if (typeof window === 'undefined') return;
     if (eventSource) eventSource.close();
+    // 🔧 Clean up camera on component destroy
+    stopLoginCamera();
     window.removeEventListener('scroll', () => {});
   });
 
@@ -814,6 +856,15 @@
   }
   
   async function startLoginCamera() {
+    // 🔧 GUARD: Prevent multiple simultaneous camera starts
+    if (isCameraActive || isCameraStarting) {
+      console.log(`⚠️ Camera already ${isCameraActive ? 'active' : 'starting'}, ignoring duplicate start request`);
+      return;
+    }
+    
+    isCameraStarting = true;
+    console.log(`📹 Starting login camera for Room: ${roomId}, Device: ${deviceSessionId}`);
+    
     try {
       // Check if mediaDevices is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -847,13 +898,13 @@
             { video: true }
           ];
 
-      let loginStream;
+      let newLoginStream;
       let attemptNum = 0;
       
       for (let config of attemptConfigurations) {
         try {
           console.log(`📹 Login camera attempt ${attemptNum + 1}:`, config);
-          loginStream = await navigator.mediaDevices.getUserMedia(config);
+          newLoginStream = await navigator.mediaDevices.getUserMedia(config);
           console.log("✅ Login camera started with config:", config);
           break;
         } catch (err) {
@@ -865,10 +916,12 @@
         }
       }
 
-      if (!loginStream) {
+      if (!newLoginStream) {
         throw new Error("Failed to get login camera stream");
       }
 
+      // ✅ Assign to outer scope loginStream so stopLoginCamera() works
+      loginStream = newLoginStream;
       loginVideo.srcObject = loginStream;
 
       // Play may fail due to autoplay policy — catch but don’t treat as camera error
@@ -888,11 +941,18 @@
       if (detectionInterval) clearInterval(detectionInterval);
       // 🎯 Start with 2 second interval (4x better than 500ms)
       detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
+      
+      // 🔧 Mark camera as active
+      isCameraActive = true;
+      isCameraStarting = false;
+      console.log(`✅ Camera active for Room: ${roomId}`);
 
     } catch (err) {
       console.error("Login camera error:", err);
       alert("❌ Could not start login camera at all");
       showLoginPage = false;
+      isCameraStarting = false;
+      isCameraActive = false;
     }
   }
 
@@ -933,12 +993,15 @@
 
     // 🎯 IMPROVED: Use compressed JPEG instead of PNG
     const imageData = takeLoginSnapshot();
+    
+    // 🔧 DEBUG: Log the roomId being sent
+    console.log(`🔍 Sending recognition request with roomId: ${roomId}, device: ${deviceSessionId}`);
 
     try {
       const res = await fetch(`${SERVER_URL}/login-recognize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageData, roomId })
+        body: JSON.stringify({ image: imageData, roomId, deviceSessionId })
       });
 
       const data = await res.json();
@@ -985,6 +1048,7 @@
     }
   }
   function stopLoginCamera() {
+    console.log(`🛑 Stopping camera for Room: ${roomId}`);
     if (detectionInterval) {
       clearInterval(detectionInterval);
       detectionInterval = null;
@@ -994,6 +1058,10 @@
       loginStream = null;
     }
     if (loginVideo) loginVideo.srcObject = null;
+    
+    // 🔧 Reset camera state
+    isCameraActive = false;
+    isCameraStarting = false;
   }
 
   function saveDeviceName() {
