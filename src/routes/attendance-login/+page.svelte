@@ -62,7 +62,14 @@
   let consecutiveFailures = 0;              // Track failures for backoff
   let lastDetectionTime = 0;                // Throttle frames
   let lastSuccessTime = 0;                  // Track idle state
-  let currentDetectionInterval = 2000;      // Start at 2 seconds (2x better than 500ms)
+  let currentDetectionInterval = 3000;      // 🚀 OPTIMIZED: Start at 3 seconds
+  let consecutiveNoFace = 0;                // Track consecutive no-face detections
+  
+  // 🚀 Performance tuning constants
+  const BASE_DETECTION_INTERVAL = 3000;     // 3 seconds base interval
+  const FAST_DETECTION_INTERVAL = 1500;     // 1.5 seconds when face recently detected
+  const SLOW_DETECTION_INTERVAL = 5000;     // 5 seconds when idle (no face)
+  const NO_FACE_THRESHOLD = 5;              // Switch to slow mode after 5 no-face detections
 
   // Settings 🔧
   // for authentication
@@ -468,11 +475,11 @@
     return canvas.toDataURL("image/jpeg", 0.9);
   }
 
-  // 🎯 IMPROVED: Convert canvas to compressed JPEG for login - crops center to 640x480
+  // 🎯 OPTIMIZED: Convert canvas to compressed JPEG for login - 320x240 for faster transfer
   function takeLoginSnapshot() {
-    // Output size (4:3)
-    const TARGET_WIDTH = 640;
-    const TARGET_HEIGHT = 480;
+    // 🚀 OPTIMIZATION: Reduced from 640x480 to 320x240 (75% less data)
+    const TARGET_WIDTH = 320;
+    const TARGET_HEIGHT = 240;
     
     loginCanvas.width = TARGET_WIDTH;
     loginCanvas.height = TARGET_HEIGHT;
@@ -504,8 +511,8 @@
     // Draw cropped center region - no stretching
     loginCtx.drawImage(loginVideo, srcX, srcY, srcWidth, srcHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
 
-    // Return compressed JPEG (60% quality)
-    return loginCanvas.toDataURL("image/jpeg", 0.6);
+    // 🚀 OPTIMIZATION: Reduced quality from 60% to 40% for faster transfer
+    return loginCanvas.toDataURL("image/jpeg", 0.4);
   }
 
   // 🎯 IMPROVED: Client-side face detection before sending to server
@@ -934,18 +941,19 @@
       // Reset detection state
       isDetectionPending = false;
       consecutiveFailures = 0;
+      consecutiveNoFace = 0;
       lastDetectionTime = 0;
       lastSuccessTime = Date.now();
-      currentDetectionInterval = 1000;
+      currentDetectionInterval = BASE_DETECTION_INTERVAL;
 
       if (detectionInterval) clearInterval(detectionInterval);
-      // 🎯 Start with 2 second interval (4x better than 500ms)
+      // 🚀 OPTIMIZED: Start with 3 second interval
       detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
       
       // 🔧 Mark camera as active
       isCameraActive = true;
       isCameraStarting = false;
-      console.log(`✅ Camera active for Room: ${roomId}`);
+      console.log(`✅ Camera active for Room: ${roomId}, interval: ${currentDetectionInterval}ms`);
 
     } catch (err) {
       console.error("Login camera error:", err);
@@ -969,11 +977,11 @@
       return;
     }
 
-    // 🎯 GUARD 3: Idle timeout - if no success for 60 seconds, stop polling
-    if (now - lastSuccessTime > 60000) {
-      console.log("⏱️ Idle timeout reached (60s), stopping auto-detection");
+    // 🎯 GUARD 3: Idle timeout - if no success for 120 seconds, stop polling
+    if (now - lastSuccessTime > 120000) {
+      console.log("⏱️ Idle timeout reached (120s), stopping auto-detection");
       stopLoginCamera();
-      loginMessage = "⏱️ Timeout: No face recognized in 60 seconds";
+      loginMessage = "⏱️ Timeout: No face recognized in 2 minutes";
       loginMessageColor = "orange";
       return;
     }
@@ -981,8 +989,29 @@
     // 🎯 GUARD 4: Client-side face detection first
     const faceDetected = await hasFaceDetected();
     if (!faceDetected) {
-      console.log("👤 No face detected locally, skipping server request");
+      // 🚀 OPTIMIZATION: Adaptive interval when no face detected
+      consecutiveNoFace++;
+      if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
+        // Switch to slow mode - no one is in front of camera
+        currentDetectionInterval = SLOW_DETECTION_INTERVAL;
+        if (detectionInterval) {
+          clearInterval(detectionInterval);
+          detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
+        }
+      }
+      console.log(`👤 No face detected locally (${consecutiveNoFace}x), interval: ${currentDetectionInterval}ms`);
       return;
+    }
+    
+    // Face detected - reset to fast mode
+    if (consecutiveNoFace > 0) {
+      consecutiveNoFace = 0;
+      currentDetectionInterval = FAST_DETECTION_INTERVAL;
+      if (detectionInterval) {
+        clearInterval(detectionInterval);
+        detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
+      }
+      console.log(`👤 Face detected! Switching to fast mode: ${currentDetectionInterval}ms`);
     }
 
     if (!loginCtx || !loginVideo.videoWidth) return;
@@ -1009,14 +1038,19 @@
       // Successfully received response
       lastSuccessTime = Date.now();
       consecutiveFailures = 0;
-      currentDetectionInterval = 2000; // Reset to normal interval
+      currentDetectionInterval = BASE_DETECTION_INTERVAL; // Reset to base interval
 
       // Directly set the recognition result
       loginMessage = data.message;
       loginMessageColor = data.message && data.message.includes("Welcome") ? "green" : "red";
       loginImageUrl = data.imageUrl || "";
-
-      console.log("✅ Recognition response:", data.message);
+      
+      // Log timing if available
+      if (data.timing) {
+        console.log(`✅ Recognition response (${data.timing}ms server): ${data.message}`);
+      } else {
+        console.log("✅ Recognition response:", data.message);
+      }
 
       // Keep camera running for continuous recognition
     } catch (err) {

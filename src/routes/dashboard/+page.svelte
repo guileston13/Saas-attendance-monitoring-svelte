@@ -11,63 +11,16 @@
 	$: teachers = data.teachers || [];
 	$: subjects = data.subjects || [];
 	
-	// Premium loading and animation states
-	let isLoading = true;
-	let loadingProgress = 0;
-	let loadingText = 'Initializing Dashboard...';
-	let loadingFadeOut = false;
-	let pageVisible = false;
-	let statsVisible = false;
-	let cardsVisible = false;
+	// 🚀 REMOVED: Premium loading animations for instant page load
 	let scrollY = 0;
 	
-	// Premium loading animation sequence
+	// Parallax scroll effect only
 	onMount(() => {
-		const loadingSteps = [
-			{ progress: 25, text: 'Loading your data...', delay: 300 },
-			{ progress: 50, text: 'Preparing statistics...', delay: 600 },
-			{ progress: 75, text: 'Building dashboard...', delay: 900 },
-			{ progress: 100, text: 'Welcome!', delay: 1200 }
-		];
-
-		let currentStep = 0;
-		
-		const runLoadingStep = () => {
-			if (currentStep < loadingSteps.length) {
-				const step = loadingSteps[currentStep];
-				setTimeout(() => {
-					loadingProgress = step.progress;
-					loadingText = step.text;
-					currentStep++;
-					runLoadingStep();
-				}, step.delay);
-			} else {
-				setTimeout(() => {
-					loadingFadeOut = true;
-					setTimeout(() => {
-						isLoading = false;
-						setTimeout(() => {
-							pageVisible = true;
-							setTimeout(() => {
-								statsVisible = true;
-								setTimeout(() => cardsVisible = true, 200);
-							}, 200);
-						}, 200);
-					}, 800);
-				}, 500);
-			}
-		};
-
-		runLoadingStep();
-
-		// Parallax scroll effect
 		const handleScroll = () => {
 			scrollY = window.scrollY;
 		};
 
-		setTimeout(() => {
-			window.addEventListener('scroll', handleScroll, { passive: true });
-		}, 2000);
+		window.addEventListener('scroll', handleScroll, { passive: true });
 
 		return () => {
 			window.removeEventListener('scroll', handleScroll);
@@ -78,70 +31,6 @@
 <svelte:head>
 	<title>Dashboard - School Management System</title>
 </svelte:head>
-
-<!-- Premium Loading Screen -->
-{#if isLoading}
-	<div class="loading-screen" class:fade-out={loadingFadeOut}>
-		<!-- Animated Background Particles -->
-		<div class="particles-container">
-			{#each Array(20) as _, i}
-				<div class="particle particle-{(i % 4) + 1}" style="animation-delay: {i * 0.1}s"></div>
-			{/each}
-		</div>
-
-		<!-- Main Loading Content -->
-		<div class="loading-content">
-			<!-- Animated Logo -->
-			<div class="loading-logo">
-				<svg class="logo-svg" fill="none" stroke="url(#logoGradient)" viewBox="0 0 24 24">
-					<defs>
-						<linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-							<stop offset="0%" stop-color="#3B82F6">
-								<animate attributeName="stop-color" values="#3B82F6;#A855F7;#22C55E;#F97316;#3B82F6" dur="3s" repeatCount="indefinite" />
-							</stop>
-							<stop offset="100%" stop-color="#A855F7">
-								<animate attributeName="stop-color" values="#A855F7;#22C55E;#F97316;#3B82F6;#A855F7" dur="3s" repeatCount="indefinite" />
-							</stop>
-						</linearGradient>
-					</defs>
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-				</svg>
-				<div class="logo-pulse"></div>
-			</div>
-
-			<!-- Brand Text -->
-			<div class="loading-brand">
-				<h1 class="brand-main">Dashboard</h1>
-				<p class="brand-tagline">Loading Your Insights</p>
-			</div>
-
-			<!-- Loading Progress -->
-			<div class="loading-progress">
-				<div class="progress-bar">
-					<div class="progress-fill" style="width: {loadingProgress}%"></div>
-					<div class="progress-glow" style="width: {loadingProgress}%"></div>
-				</div>
-				<div class="progress-text">{loadingText}</div>
-				<div class="progress-percentage">{loadingProgress}%</div>
-			</div>
-
-			<!-- Loading Dots Animation -->
-			<div class="loading-dots">
-				<div class="dot dot-1"></div>
-				<div class="dot dot-2"></div>
-				<div class="dot dot-3"></div>
-			</div>
-		</div>
-
-		<!-- Background Gradient Orbs -->
-		<div class="loading-orbs">
-			<div class="orb orb-1"></div>
-			<div class="orb orb-2"></div>
-			<div class="orb orb-3"></div>
-			<div class="orb orb-4"></div>
-		</div>
-	</div>
-{/if}
 
 <!-- Animated Background Layer -->
 <div class="animated-background" style="transform: translateY({scrollY * 0.3}px)">
@@ -154,9 +43,9 @@
 	<div class="floating-orb orb-bg-3"></div>
 </div>
 
-<div class="dashboard" class:visible={pageVisible}>
+<div class="dashboard">
 	<!-- Page Header with Glass Morphism -->
-	<div class="dashboard-header" class:visible={pageVisible}>
+	<div class="dashboard-header">
 		<div class="header-icon-wrapper">
 			<svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -169,7 +58,7 @@
 	</div>
 	
 	{#if data.error}
-		<div class="error-message error-slide-in">
+		<div class="error-message">
 			<svg class="error-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 			</svg>
@@ -179,7 +68,7 @@
 	
 	<!-- Admin Dashboard -->
 	{#if session.role === 'Admin'}
-		<div class="stats-grid" class:visible={statsVisible}>
+		<div class="stats-grid">
 			<div class="stat-card stat-card-1">
 				<div class="stat-glow"></div>
 				<div class="stat-icon-wrapper">
@@ -230,7 +119,7 @@
 			</div>
 		</div>
 		
-		<div class="dashboard-grid" class:visible={cardsVisible}>
+		<div class="dashboard-grid">
 			<div class="dashboard-card">
 				<div class="card-header">
 					<h3 class="card-title">📋 Recent Sections</h3>
@@ -376,260 +265,6 @@
 
 <style>
 	/* ========================================
-	   PREMIUM LOADING SCREEN STYLES
-	   ======================================== */
-	
-	.loading-screen {
-		position: fixed;
-		inset: 0;
-		z-index: 9999;
-		background: linear-gradient(135deg, #0f172a, #1e293b, #334155);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		overflow: hidden;
-		animation: loadingFadeIn 0.5s ease-out;
-	}
-
-	.loading-screen.fade-out {
-		animation: loadingFadeOut 0.8s ease-in-out forwards;
-	}
-
-	.particles-container {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-	}
-
-	.particle {
-		position: absolute;
-		border-radius: 50%;
-		opacity: 0.6;
-		animation: particleFloat 8s ease-in-out infinite;
-	}
-
-	.particle-1 {
-		width: 4px;
-		height: 4px;
-		background: #3B82F6;
-	}
-
-	.particle-2 {
-		width: 6px;
-		height: 6px;
-		background: #A855F7;
-	}
-
-	.particle-3 {
-		width: 3px;
-		height: 3px;
-		background: #22C55E;
-	}
-
-	.particle-4 {
-		width: 5px;
-		height: 5px;
-		background: #F97316;
-	}
-
-	.particle:nth-child(1) { top: 10%; left: 10%; }
-	.particle:nth-child(2) { top: 20%; left: 80%; animation-delay: 0.5s; }
-	.particle:nth-child(3) { top: 30%; left: 20%; animation-delay: 1s; }
-	.particle:nth-child(4) { top: 40%; left: 70%; animation-delay: 1.5s; }
-	.particle:nth-child(5) { top: 50%; left: 30%; animation-delay: 2s; }
-	.particle:nth-child(6) { top: 60%; left: 90%; animation-delay: 0.3s; }
-	.particle:nth-child(7) { top: 70%; left: 40%; animation-delay: 0.8s; }
-	.particle:nth-child(8) { top: 80%; left: 60%; animation-delay: 1.3s; }
-	.particle:nth-child(9) { top: 15%; left: 50%; animation-delay: 1.8s; }
-	.particle:nth-child(10) { top: 85%; left: 15%; animation-delay: 0.6s; }
-	.particle:nth-child(11) { top: 25%; left: 85%; animation-delay: 1.1s; }
-	.particle:nth-child(12) { top: 75%; left: 25%; animation-delay: 1.6s; }
-	.particle:nth-child(13) { top: 35%; left: 45%; animation-delay: 2.1s; }
-	.particle:nth-child(14) { top: 65%; left: 75%; animation-delay: 0.4s; }
-	.particle:nth-child(15) { top: 45%; left: 5%; animation-delay: 0.9s; }
-	.particle:nth-child(16) { top: 55%; left: 95%; animation-delay: 1.4s; }
-	.particle:nth-child(17) { top: 5%; left: 35%; animation-delay: 1.9s; }
-	.particle:nth-child(18) { top: 95%; left: 65%; animation-delay: 0.7s; }
-	.particle:nth-child(19) { top: 55%; left: 55%; animation-delay: 1.2s; }
-	.particle:nth-child(20) { top: 75%; left: 85%; animation-delay: 1.7s; }
-
-	.loading-content {
-		text-align: center;
-		z-index: 10;
-		position: relative;
-	}
-
-	.loading-logo {
-		position: relative;
-		display: inline-block;
-		margin-bottom: 2rem;
-	}
-
-	.logo-svg {
-		width: 6rem;
-		height: 6rem;
-		filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5));
-		animation: logoRotate 4s ease-in-out infinite;
-	}
-
-	.logo-pulse {
-		position: absolute;
-		inset: -1rem;
-		border-radius: 50%;
-		background: radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%);
-		animation: logoPulse 2s ease-in-out infinite;
-	}
-
-	.loading-brand {
-		margin-bottom: 3rem;
-	}
-
-	.brand-main {
-		font-size: 3rem;
-		font-weight: 800;
-		background: linear-gradient(135deg, #3B82F6, #A855F7, #22C55E, #F97316);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		margin-bottom: 0.5rem;
-		animation: textGlow 3s ease-in-out infinite alternate;
-	}
-
-	.brand-tagline {
-		font-size: 1.5rem;
-		font-weight: 600;
-		color: #94a3b8;
-		letter-spacing: 0.1em;
-	}
-
-	.loading-progress {
-		margin-bottom: 2rem;
-	}
-
-	.progress-bar {
-		width: 300px;
-		height: 6px;
-		background: rgba(255, 255, 255, 0.1);
-		border-radius: 3px;
-		margin: 0 auto 1rem;
-		overflow: hidden;
-		position: relative;
-	}
-
-	.progress-fill {
-		height: 100%;
-		background: linear-gradient(90deg, #3B82F6, #A855F7, #22C55E);
-		border-radius: 3px;
-		transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-		position: relative;
-	}
-
-	.progress-fill::after {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 0;
-		bottom: 0;
-		right: 0;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-		animation: progressShine 2s ease-in-out infinite;
-	}
-
-	.progress-glow {
-		position: absolute;
-		top: 0;
-		left: 0;
-		height: 100%;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
-		border-radius: 3px;
-		animation: progressGlow 1.5s ease-in-out infinite;
-	}
-
-	.progress-text {
-		color: #cbd5e1;
-		font-size: 1rem;
-		font-weight: 500;
-		margin-bottom: 0.5rem;
-		animation: textFade 0.5s ease-in-out;
-	}
-
-	.progress-percentage {
-		color: #3B82F6;
-		font-size: 1.2rem;
-		font-weight: 700;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.loading-dots {
-		display: flex;
-		justify-content: center;
-		gap: 0.5rem;
-		margin-top: 1rem;
-	}
-
-	.loading-dots .dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: #3B82F6;
-		animation: dotBounce 1.4s ease-in-out infinite both;
-	}
-
-	.dot-1 { animation-delay: -0.32s; }
-	.dot-2 { animation-delay: -0.16s; }
-	.dot-3 { animation-delay: 0s; }
-
-	.loading-orbs {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-	}
-
-	.orb {
-		position: absolute;
-		border-radius: 50%;
-		filter: blur(60px);
-		opacity: 0.3;
-		animation: orbFloat 6s ease-in-out infinite;
-	}
-
-	.orb-1 {
-		width: 200px;
-		height: 200px;
-		background: #3B82F6;
-		top: 10%;
-		left: 10%;
-		animation-delay: 0s;
-	}
-
-	.orb-2 {
-		width: 300px;
-		height: 300px;
-		background: #A855F7;
-		top: 60%;
-		right: 10%;
-		animation-delay: 2s;
-	}
-
-	.orb-3 {
-		width: 150px;
-		height: 150px;
-		background: #22C55E;
-		bottom: 20%;
-		left: 20%;
-		animation-delay: 4s;
-	}
-
-	.orb-4 {
-		width: 250px;
-		height: 250px;
-		background: #F97316;
-		top: 30%;
-		right: 30%;
-		animation-delay: 1s;
-	}
-
-	/* ========================================
 	   ANIMATED BACKGROUND & DOT PATTERN
 	   ======================================== */
 	
@@ -693,14 +328,6 @@
 		max-width: 1400px;
 		margin: 0 auto;
 		padding: 2rem;
-		opacity: 0;
-		transform: translateY(20px);
-		transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.dashboard.visible {
-		opacity: 1;
-		transform: translateY(0);
 	}
 
 	/* ========================================
@@ -721,14 +348,6 @@
 		gap: 2rem;
 		position: relative;
 		overflow: hidden;
-		opacity: 0;
-		transform: translateY(30px) scale(0.95);
-		transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.dashboard-header.visible {
-		opacity: 1;
-		transform: translateY(0) scale(1);
 	}
 
 	.dashboard-header::before {
@@ -805,10 +424,6 @@
 		animation: shake 0.4s ease;
 	}
 
-	.error-slide-in {
-		animation: slideInFromTop 0.5s ease-out, shake 0.4s ease 0.5s;
-	}
-
 	.error-icon {
 		width: 1.5rem;
 		height: 1.5rem;
@@ -824,14 +439,6 @@
 		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 		gap: 1.5rem;
 		margin-bottom: 2rem;
-		opacity: 0;
-		transform: translateY(30px);
-		transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s;
-	}
-
-	.stats-grid.visible {
-		opacity: 1;
-		transform: translateY(0);
 	}
 
 	.stat-card {
@@ -952,14 +559,6 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
 		gap: 2rem;
-		opacity: 0;
-		transform: translateY(30px);
-		transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.4s;
-	}
-
-	.dashboard-grid.visible {
-		opacity: 1;
-		transform: translateY(0);
 	}
 
 	.dashboard-card {
@@ -1125,95 +724,7 @@
 	   ANIMATIONS & KEYFRAMES
 	   ======================================== */
 	
-	@keyframes loadingFadeIn {
-		0% { opacity: 0; }
-		100% { opacity: 1; }
-	}
 
-	@keyframes loadingFadeOut {
-		0% { opacity: 1; transform: scale(1); }
-		100% { opacity: 0; transform: scale(1.05); }
-	}
-
-	@keyframes particleFloat {
-		0%, 100% {
-			transform: translate(0, 0);
-			opacity: 0.6;
-		}
-		25% {
-			transform: translate(10px, -10px);
-			opacity: 0.8;
-		}
-		50% {
-			transform: translate(-10px, -20px);
-			opacity: 0.4;
-		}
-		75% {
-			transform: translate(-20px, 10px);
-			opacity: 0.7;
-		}
-	}
-
-	@keyframes logoRotate {
-		0%, 100% { transform: rotate(0deg) scale(1); }
-		25% { transform: rotate(5deg) scale(1.05); }
-		50% { transform: rotate(-5deg) scale(0.95); }
-		75% { transform: rotate(3deg) scale(1.02); }
-	}
-
-	@keyframes logoPulse {
-		0%, 100% {
-			transform: scale(1);
-			opacity: 0.5;
-		}
-		50% {
-			transform: scale(1.2);
-			opacity: 0.8;
-		}
-	}
-
-	@keyframes textGlow {
-		0% { filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.5)); }
-		100% { filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.8)); }
-	}
-
-	@keyframes progressShine {
-		0% { transform: translateX(-100%); }
-		100% { transform: translateX(100%); }
-	}
-
-	@keyframes progressGlow {
-		0%, 100% { opacity: 0; transform: translateX(-50%); }
-		50% { opacity: 1; transform: translateX(50%); }
-	}
-
-	@keyframes textFade {
-		0% { opacity: 0; transform: translateY(10px); }
-		100% { opacity: 1; transform: translateY(0); }
-	}
-
-	@keyframes dotBounce {
-		0%, 80%, 100% {
-			transform: scale(0.8);
-			opacity: 0.6;
-		}
-		40% {
-			transform: scale(1.2);
-			opacity: 1;
-		}
-	}
-
-	@keyframes orbFloat {
-		0%, 100% {
-			transform: translate(0, 0) scale(1);
-		}
-		33% {
-			transform: translate(30px, -30px) scale(1.1);
-		}
-		66% {
-			transform: translate(-20px, 20px) scale(0.9);
-		}
-	}
 
 	@keyframes float {
 		0%, 100% {
@@ -1241,27 +752,7 @@
 		75% { transform: translateX(8px); }
 	}
 
-	@keyframes slideInFromTop {
-		0% {
-			opacity: 0;
-			transform: translateY(-20px);
-		}
-		100% {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
 
-	@keyframes cascadeIn {
-		0% {
-			opacity: 0;
-			transform: translateY(20px) scale(0.95);
-		}
-		100% {
-			opacity: 1;
-			transform: translateY(0) scale(1);
-		}
-	}
 
 	@keyframes glowPulse {
 		0%, 100% {
@@ -1373,13 +864,6 @@
 			font-size: 1.75rem;
 		}
 
-		.brand-main {
-			font-size: 2rem;
-		}
-
-		.brand-tagline {
-			font-size: 1.125rem;
-		}
 	}
 
 	/* ========================================

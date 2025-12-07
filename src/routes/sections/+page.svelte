@@ -33,13 +33,6 @@
 	let enrollmentMessageType = "info";
 
 	let searchTerm = "";
-	let isLoading = true;
-	let loadingProgress = 0;
-	let loadingText = "Initializing...";
-	let loadingFadeOut = false;
-	let pageVisible = false;
-	let statsVisible = false;
-	let cardsVisible = false;
 	let scrollY = 0;
 	let selectedStudents = new Set();
 	let enrolledStudents = [];
@@ -73,38 +66,6 @@
 	});
 
 	onMount(() => {
-		const loadingSteps = [
-			{ progress: 25, text: "Loading sections..." },
-			{ progress: 50, text: "Preparing interface..." },
-			{ progress: 75, text: "Finishing up..." },
-			{ progress: 100, text: "Ready!" },
-		];
-
-		function runLoadingStep(index) {
-			if (index < loadingSteps.length) {
-				const step = loadingSteps[index];
-				loadingProgress = step.progress;
-				loadingText = step.text;
-				setTimeout(() => runLoadingStep(index + 1), 300);
-			} else {
-				loadingFadeOut = true;
-				setTimeout(() => {
-					isLoading = false;
-					setTimeout(() => {
-						pageVisible = true;
-						setTimeout(() => {
-							statsVisible = true;
-							setTimeout(() => {
-								cardsVisible = true;
-							}, 200);
-						}, 100);
-					}, 100);
-				}, 800);
-			}
-		}
-
-		runLoadingStep(0);
-
 		const handleScroll = () => {
 			scrollY = window.scrollY;
 		};
@@ -404,97 +365,6 @@
 	<title>Sections - School Management System</title>
 </svelte:head>
 
-{#if isLoading}
-	<div class="loading-screen" class:fade-out={loadingFadeOut}>
-		<div class="particles-container">
-			{#each Array(20) as _, i}
-				<div class="particle particle-{(i % 4) + 1}"></div>
-			{/each}
-		</div>
-
-		<div class="loading-content">
-			<div class="loading-logo">
-				<div class="logo-pulse"></div>
-				<svg
-					class="logo-svg"
-					viewBox="0 0 100 100"
-					xmlns="http://www.w3.org/2000/svg"
-				>
-					<defs>
-						<linearGradient
-							id="gradientLogo"
-							x1="0%"
-							y1="0%"
-							x2="100%"
-							y2="100%"
-						>
-							<stop
-								offset="0%"
-								style="stop-color:#3B82F6;stop-opacity:1"
-							/>
-							<stop
-								offset="100%"
-								style="stop-color:#A855F7;stop-opacity:1"
-							/>
-						</linearGradient>
-					</defs>
-					<rect
-						x="20"
-						y="20"
-						width="60"
-						height="60"
-						rx="10"
-						fill="url(#gradientLogo)"
-					/>
-					<text
-						x="50"
-						y="65"
-						font-size="40"
-						font-weight="bold"
-						text-anchor="middle"
-						fill="white">🏫</text
-					>
-				</svg>
-			</div>
-
-			<div class="loading-brand">
-				<div class="brand-main">School Management</div>
-				<div class="brand-tagline">SECTIONS MODULE</div>
-			</div>
-
-			<div class="loading-progress">
-				<div class="progress-bar">
-					<div
-						class="progress-fill"
-						style="width: {loadingProgress}%"
-					></div>
-					<div
-						class="progress-glow"
-						style="left: {loadingProgress}%"
-					></div>
-				</div>
-				<div class="progress-text">
-					<span class="progress-percentage">{loadingProgress}%</span>
-					<span> - {loadingText}</span>
-				</div>
-			</div>
-
-			<div class="loading-dots">
-				<span class="dot dot-1"></span>
-				<span class="dot dot-2"></span>
-				<span class="dot dot-3"></span>
-			</div>
-
-			<div class="loading-orbs">
-				<div class="orb orb-1"></div>
-				<div class="orb orb-2"></div>
-				<div class="orb orb-3"></div>
-				<div class="orb orb-4"></div>
-			</div>
-		</div>
-	</div>
-{/if}
-
 <div
 	class="animated-background"
 	style="transform: translateY({scrollY * 0.3}px);"
@@ -505,8 +375,8 @@
 	<div class="floating-orb orb-bg-3"></div>
 </div>
 
-<div class="sections-page" class:visible={pageVisible}>
-	<div class="page-header" class:visible={pageVisible}>
+<div class="sections-page">
+	<div class="page-header">
 		<div class="header-icon-wrapper">
 			<svg
 				class="header-icon"
@@ -542,7 +412,7 @@
 		</button>
 	</div>
 
-	<div class="stats-grid" class:visible={statsVisible}>
+	<div class="stats-grid">
 		<div class="stat-card stat-card-1">
 			<div class="stat-glow"></div>
 			<div class="stat-icon-wrapper">
@@ -633,7 +503,7 @@
 	</div>
 
 	<!-- Search and Sections Grid -->
-	<div class="content-section" class:visible={cardsVisible}>
+	<div class="content-section">
 		<div class="section-card">
 			<div class="card-header">
 				<h3 class="card-title">📚 Section Records</h3>
@@ -1883,336 +1753,6 @@
 		overflow-x: hidden;
 	}
 
-	.loading-screen {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100vh;
-		background: linear-gradient(135deg, #f5f7fa 0%, #f1f5f9 100%);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 9999;
-		overflow: hidden;
-		transition: opacity 0.8s ease-out;
-	}
-
-	.loading-screen.fade-out {
-		opacity: 0;
-		pointer-events: none;
-	}
-
-	.particles-container {
-		position: absolute;
-		width: 100%;
-		height: 100%;
-		overflow: hidden;
-	}
-
-	.particle {
-		position: absolute;
-		width: 6px;
-		height: 6px;
-		background: radial-gradient(
-			circle,
-			rgba(59, 130, 246, 0.6),
-			rgba(59, 130, 246, 0.2)
-		);
-		border-radius: 50%;
-		animation: particleFloat 4s ease-in-out infinite;
-	}
-
-	.particle-1 {
-		width: 4px;
-		height: 4px;
-		animation-delay: 0s;
-		left: 10%;
-		top: 20%;
-	}
-	.particle-2 {
-		width: 6px;
-		height: 6px;
-		animation-delay: 1s;
-		left: 80%;
-		top: 60%;
-	}
-	.particle-3 {
-		width: 5px;
-		height: 5px;
-		animation-delay: 2s;
-		left: 30%;
-		top: 70%;
-	}
-	.particle-4 {
-		width: 7px;
-		height: 7px;
-		animation-delay: 3s;
-		left: 60%;
-		top: 10%;
-	}
-
-	@keyframes particleFloat {
-		0%,
-		100% {
-			transform: translateY(0px) translateX(0px);
-			opacity: 0;
-		}
-		50% {
-			transform: translateY(-20px) translateX(10px);
-			opacity: 0.6;
-		}
-	}
-
-	.loading-content {
-		position: relative;
-		z-index: 10;
-		text-align: center;
-	}
-
-	.loading-logo {
-		position: relative;
-		width: 100px;
-		height: 100px;
-		margin: 0 auto 30px;
-	}
-
-	.logo-pulse {
-		position: absolute;
-		inset: 0;
-		border-radius: 20px;
-		background: linear-gradient(
-			135deg,
-			rgba(59, 130, 246, 0.3),
-			rgba(168, 85, 247, 0.3)
-		);
-		animation: pulse-scale 2s ease-in-out infinite;
-	}
-
-	.logo-svg {
-		position: relative;
-		width: 100%;
-		height: 100%;
-		z-index: 2;
-	}
-
-	@keyframes pulse-scale {
-		0%,
-		100% {
-			transform: scale(1);
-			opacity: 0.5;
-		}
-		50% {
-			transform: scale(1.1);
-			opacity: 1;
-		}
-	}
-
-	.loading-brand {
-		margin-bottom: 30px;
-	}
-
-	.brand-main {
-		font-size: 28px;
-		font-weight: 700;
-		background: linear-gradient(135deg, #3b82f6, #a855f7);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		letter-spacing: -0.5px;
-	}
-
-	.brand-tagline {
-		font-size: 12px;
-		color: #64748b;
-		text-transform: uppercase;
-		letter-spacing: 2px;
-		margin-top: 8px;
-		font-weight: 600;
-	}
-
-	.loading-progress {
-		width: 280px;
-		margin: 0 auto 20px;
-	}
-
-	.progress-bar {
-		position: relative;
-		height: 6px;
-		background: rgba(15, 23, 42, 0.1);
-		border-radius: 10px;
-		overflow: hidden;
-		margin-bottom: 8px;
-	}
-
-	.progress-fill {
-		height: 100%;
-		background: linear-gradient(90deg, #3b82f6, #a855f7);
-		border-radius: 10px;
-		transition: width 0.3s ease-out;
-	}
-
-	.progress-glow {
-		position: absolute;
-		top: 0;
-		height: 100%;
-		width: 30px;
-		background: linear-gradient(
-			90deg,
-			transparent,
-			rgba(255, 255, 255, 0.8),
-			transparent
-		);
-		filter: blur(8px);
-		animation: glow-shift 1.5s ease-in-out infinite;
-	}
-
-	@keyframes glow-shift {
-		0%,
-		100% {
-			opacity: 0;
-		}
-		50% {
-			opacity: 1;
-		}
-	}
-
-	.progress-text {
-		font-size: 12px;
-		color: #475569;
-		text-align: center;
-		font-weight: 500;
-	}
-
-	.progress-percentage {
-		font-weight: 700;
-		color: #1e293b;
-	}
-
-	.loading-dots {
-		display: flex;
-		gap: 8px;
-		justify-content: center;
-		margin-bottom: 20px;
-	}
-
-	.dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: #cbd5e1;
-		animation: dot-bounce 1s ease-in-out infinite;
-	}
-
-	.dot-1 {
-		animation-delay: 0s;
-	}
-	.dot-2 {
-		animation-delay: 0.15s;
-	}
-	.dot-3 {
-		animation-delay: 0.3s;
-	}
-
-	@keyframes dot-bounce {
-		0%,
-		100% {
-			transform: translateY(0);
-			opacity: 0.5;
-		}
-		50% {
-			transform: translateY(-8px);
-			opacity: 1;
-		}
-	}
-
-	.loading-orbs {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
-	}
-
-	.orb {
-		position: absolute;
-		border-radius: 50%;
-		filter: blur(60px);
-		opacity: 0.1;
-	}
-
-	.orb-1 {
-		width: 150px;
-		height: 150px;
-		background: #3b82f6;
-		top: 20%;
-		left: 10%;
-		animation: float-8s 8s ease-in-out infinite;
-	}
-
-	.orb-2 {
-		width: 200px;
-		height: 200px;
-		background: #a855f7;
-		bottom: 20%;
-		right: 10%;
-		animation: float-10s-reverse 10s ease-in-out infinite;
-	}
-
-	.orb-3 {
-		width: 120px;
-		height: 120px;
-		background: #22c55e;
-		top: 50%;
-		left: 50%;
-		animation: float-12s 12s ease-in-out infinite;
-	}
-
-	@keyframes float-8s {
-		0%,
-		100% {
-			transform: translate(0, 0);
-		}
-		25% {
-			transform: translate(30px, -30px);
-		}
-		50% {
-			transform: translate(0, -40px);
-		}
-		75% {
-			transform: translate(-30px, -20px);
-		}
-	}
-
-	@keyframes float-10s-reverse {
-		0%,
-		100% {
-			transform: translate(0, 0);
-		}
-		25% {
-			transform: translate(-30px, 30px);
-		}
-		50% {
-			transform: translate(0, 40px);
-		}
-		75% {
-			transform: translate(30px, 20px);
-		}
-	}
-
-	@keyframes float-12s {
-		0%,
-		100% {
-			transform: translate(0, 0);
-		}
-		33% {
-			transform: translate(20px, -40px);
-		}
-		66% {
-			transform: translate(-20px, 20px);
-		}
-	}
-
 	/* ===== ANIMATED BACKGROUND ===== */
 	.animated-background {
 		position: fixed;
@@ -2317,14 +1857,6 @@
 		z-index: 1;
 		padding: 40px 20px;
 		min-height: 100vh;
-		opacity: 0;
-		transform: translateY(20px);
-		transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.sections-page.visible {
-		opacity: 1;
-		transform: translateY(0);
 	}
 
 	/* ===== PAGE HEADER ===== */
@@ -2340,14 +1872,6 @@
 		margin-bottom: 40px;
 		position: relative;
 		overflow: hidden;
-		opacity: 0;
-		transform: translateY(-20px);
-		transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.page-header.visible {
-		opacity: 1;
-		transform: translateY(0);
 	}
 
 	.page-header::before {
@@ -2374,24 +1898,12 @@
 		background: linear-gradient(135deg, #3b82f6, #a855f7);
 		border-radius: 16px;
 		flex-shrink: 0;
-
-		animation: pulse-slow 3s ease-in-out infinite;
 	}
 
 	.header-icon {
 		width: 40px;
 		height: 40px;
 		color: white;
-	}
-
-	@keyframes pulse-slow {
-		0%,
-		100% {
-			box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
-		}
-		50% {
-			box-shadow: 0 0 0 20px rgba(59, 130, 246, 0);
-		}
 	}
 
 	.header-content {
@@ -2420,14 +1932,6 @@
 		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 		gap: 20px;
 		margin-bottom: 40px;
-		opacity: 0;
-		transform: translateY(20px);
-		transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.stats-grid.visible {
-		opacity: 1;
-		transform: translateY(0);
 	}
 
 	.stat-card {
@@ -2439,31 +1943,6 @@
 		padding: 24px;
 		overflow: hidden;
 		transition: all 0.3s ease-out;
-		animation: cascadeIn 0.5s ease-out forwards;
-	}
-
-	.stat-card-1 {
-		animation-delay: 0.1s;
-	}
-	.stat-card-2 {
-		animation-delay: 0.2s;
-	}
-	.stat-card-3 {
-		animation-delay: 0.3s;
-	}
-	.stat-card-4 {
-		animation-delay: 0.4s;
-	}
-
-	@keyframes cascadeIn {
-		from {
-			opacity: 0;
-			transform: translateY(20px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
 	}
 
 	.stat-card::before {
@@ -2558,16 +2037,7 @@
 	}
 
 	/* ===== CONTENT SECTION ===== */
-	.content-section {
-		opacity: 0;
-		transform: translateY(20px);
-		transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.content-section.visible {
-		opacity: 1;
-		transform: translateY(0);
-	}
+	
 
 	.section-card {
 		background: rgba(255, 255, 255, 0.4);
@@ -3463,11 +2933,7 @@
 		flex-shrink: 0;
 	}
 
-	.student-checkbox input[type="checkbox"] {
-		width: 18px;
-		height: 18px;
-		cursor: pointer;
-	}
+	
 
 	.student-info {
 		flex: 1;
@@ -3683,9 +3149,6 @@
 	}
 
 	@media (max-width: 480px) {
-		.loading-brand .brand-main {
-			font-size: 22px;
-		}
 
 		.page-header {
 			padding: 16px 12px;

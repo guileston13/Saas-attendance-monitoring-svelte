@@ -20,8 +20,150 @@ if (!fs.existsSync(FACE_DIR)) fs.mkdirSync(FACE_DIR, { recursive: true });
 if (!fs.existsSync(DESC_DIR)) fs.mkdirSync(DESC_DIR, { recursive: true });
 if (!fs.existsSync(MODEL_PATH)) fs.mkdirSync(MODEL_PATH, { recursive: true });
 
+// ============================================================================
+// 🚀 PERFORMANCE OPTIMIZATION: In-memory descriptor cache
+// ============================================================================
+let descriptorCache = new Map(); // Map<studentId, {descriptors, metadata}>
+let descriptorCacheLoadedAt = 0;
+const DESCRIPTOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+let isLoadingDescriptorCache = false;
+
 /**
- * Log attendance record to logs.txt (new entries at top)
+ * Preload all student descriptors into memory cache
+ * Eliminates per-request file I/O which is the main bottleneck
+ */
+async function preloadDescriptorCache() {
+  if (isLoadingDescriptorCache) return;
+  isLoadingDescriptorCache = true;
+  
+  const startTime = Date.now();
+  try {
+    const descFiles = fs.readdirSync(DESC_DIR).filter(f => f.endsWith('.json'));
+    const newCache = new Map();
+    
+    for (const descFile of descFiles) {
+      const studentId = descFile.replace('.json', '');
+      const filePath = path.join(DESC_DIR, descFile);
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      const descriptors = Array.isArray(data) ? data : data.descriptors;
+      
+      if (Array.isArray(descriptors)) {
+        // Pre-convert descriptors to Float32Arrays for faster euclidean distance
+        const optimizedDescriptors = descriptors.map(desc => {
+          const arr = Array.isArray(desc) ? desc : Object.values(desc);
+          return new Float32Array(arr);
+        });
+        
+        newCache.set(studentId, {
+          descriptors: optimizedDescriptors,
+          firstName: data.firstName || '',
+          lastName: data.surname || ''
+        });
+      }
+    }
+    
+    descriptorCache = newCache;
+    descriptorCacheLoadedAt = Date.now();
+    console.log(`🚀 Descriptor cache loaded: ${newCache.size} students in ${Date.now() - startTime}ms`);
+  } catch (error) {
+    console.error('⚠️ Failed to preload descriptor cache:', error.message);
+  } finally {
+    isLoadingDescriptorCache = false;
+  }
+}
+
+/**
+ * Get cached descriptors, reloading if stale or empty
+ */
+async function getCachedDescriptors() {
+  const now = Date.now();
+  if (descriptorCache.size === 0 || (now - descriptorCacheLoadedAt) > DESCRIPTOR_CACHE_TTL) {
+    await preloadDescriptorCache();
+  }
+  return descriptorCache;
+}
+
+/**
+ * Add or update a student in the cache (call after registration)
+ */
+function updateStudentInCache(studentId, descriptors, firstName, lastName) {
+  const optimizedDescriptors = descriptors.map(desc => {
+    const arr = Array.isArray(desc) ? desc : Object.values(desc);
+    return new Float32Array(arr);
+  });
+  descriptorCache.set(studentId, { descriptors: optimizedDescriptors, firstName, lastName });
+  console.log(`🔄 Cache updated for student: ${studentId}`);
+}
+
+/**
+ * Force full cache reload
+ */
+function invalidateDescriptorCache() {
+  descriptorCache.clear();
+  descriptorCacheLoadedAt = 0;
+  console.log(`🔄 Descriptor cache invalidated`);
+}
+
+// ============================================================================
+// 🚀 PERFORMANCE OPTIMIZATION: Schedule cache
+// ============================================================================
+let scheduleCache = new Map(); // Map<cacheKey, {schedules, loadedAt}>
+const SCHEDULE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes TTL
+
+/**
+ * Get cached schedule for a room on current day for a specific student
+ */
+async function getCachedScheduleForStudent(roomId, studentId) {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ...
+  const cacheKey = `room_${roomId}_day_${dayOfWeek}`;
+  
+  let roomSchedules = scheduleCache.get(cacheKey);
+  
+  // Check if cache is valid
+  if (!roomSchedules || (Date.now() - roomSchedules.loadedAt) > SCHEDULE_CACHE_TTL) {
+    // Cache miss or stale - reload schedules for this room/day
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayColumn = dayNames[dayOfWeek];
+    const startColumn = `${dayColumn}Start`;
+    const endColumn = `${dayColumn}End`;
+    
+    // Simplified query - get all active schedules for this room today
+    const query = `
+      SELECT ss.SubjectID, ss.SectionID, ss.TeacherID, s.subject_name,
+             se.StudentID,
+             ss.${startColumn} AS StartTime,
+             ss.${endColumn} AS EndTime
+      FROM section_subjects ss
+      JOIN subject_enrollments se ON ss.SectionID = se.SectionID AND ss.SubjectID = se.SubjectID
+      JOIN subjects s ON ss.SubjectID = s.SubjectID
+      WHERE ss.RoomID = ?
+        AND se.Status = 'Active'
+        AND ss.${dayColumn} = 1
+    `;
+    
+    const schedules = await executeQuery(query, [roomId]);
+    roomSchedules = { schedules, loadedAt: Date.now() };
+    scheduleCache.set(cacheKey, roomSchedules);
+    console.log(`🚀 Schedule cache loaded for room ${roomId}, day ${dayColumn}: ${schedules.length} entries`);
+  }
+  
+  // Filter for this student and current time
+  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  
+  return roomSchedules.schedules.filter(s => {
+    if (s.StudentID !== studentId) return false;
+    if (!s.StartTime || !s.EndTime) return false;
+    return currentTime >= s.StartTime && currentTime <= s.EndTime;
+  });
+}
+
+// Preload caches on module load (server startup)
+console.log('🚀 Starting performance optimizations...');
+preloadDescriptorCache().catch(err => console.error('Descriptor preload failed:', err));
+
+/**
+ * Log attendance record to logs.txt (async, non-blocking)
  * @param {Object} record - Attendance record data
  * @param {string} action - 'INSERT' or 'UPDATE'
  */
@@ -29,44 +171,49 @@ function logAttendanceRecord(record, action = 'INSERT') {
   try {
     const { id, student_id, subject_id, class_subject_id, section_id, attendance_date, login_time, status, recorded_by, recorded_at } = record;
     
-    // Format the log entry (tab-separated like the existing format)
-    const logEntry = `${id || ''}\t${student_id}\t${subject_id}\t${class_subject_id || ''}\t${section_id}\t${attendance_date}\t${login_time || ''}\t${status || ''}\t${recorded_by}\t${recorded_at}`;
+    // Format the log entry (tab-separated)
+    const logEntry = `${id || ''}\t${student_id}\t${subject_id}\t${class_subject_id || ''}\t${section_id}\t${attendance_date}\t${login_time || ''}\t${status || ''}\t${recorded_by}\t${recorded_at}\n`;
     
-    // Read existing content
-    let existingContent = '';
-    let header = 'id\tstudent_id\tsubject_id\tclass_subject_id\tsection_id\tattendance_date\tlogin_time\tstatus\trecorded_by\trecorded_at';
-    
-    if (fs.existsSync(LOGS_FILE)) {
-      existingContent = fs.readFileSync(LOGS_FILE, 'utf-8');
-      const lines = existingContent.split('\n');
-      if (lines.length > 0 && lines[0].includes('student_id')) {
-        header = lines[0];
-        existingContent = lines.slice(1).join('\n');
-      }
-    }
-    
-    // Prepend new entry (after header)
-    const newContent = `${header}\n${logEntry}\n${existingContent}`.trim() + '\n';
-    
-    fs.writeFileSync(LOGS_FILE, newContent, 'utf-8');
-    console.log(`📝 [${action}] Logged attendance for student ${student_id}`);
+    // 🚀 OPTIMIZATION: Use async append instead of blocking read+write
+    fs.appendFile(LOGS_FILE, logEntry, (err) => {
+      if (err) console.error('⚠️ Failed to write to logs.txt:', err.message);
+      else console.log(`📝 [${action}] Logged attendance for student ${student_id}`);
+    });
   } catch (error) {
     console.error('⚠️ Failed to write to logs.txt:', error.message);
   }
 }
 
 let modelsLoaded = false;
+let modelsLoading = false;
+
 async function ensureModelsLoaded() {
-  if (!modelsLoaded) {
+  if (modelsLoaded) return;
+  if (modelsLoading) {
+    // Wait for loading to complete if already in progress
+    while (modelsLoading) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return;
+  }
+  
+  modelsLoading = true;
+  const startTime = Date.now();
+  try {
     await Promise.all([
       faceapi.nets.mtcnn.loadFromDisk(MODEL_PATH),
       faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_PATH),
       faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_PATH),
     ]);
-    console.log("✅ MTCNN + Landmarks + Recognition models loaded");
+    console.log(`✅ MTCNN + Landmarks + Recognition models loaded in ${Date.now() - startTime}ms`);
     modelsLoaded = true;
+  } finally {
+    modelsLoading = false;
   }
 }
+
+// 🚀 Preload models at server startup
+ensureModelsLoaded().catch(err => console.error('Model preload failed:', err));
 
 function bufferFromBase64(base64) {
   return Buffer.from(base64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
@@ -438,6 +585,9 @@ export async function handleRegister(request) {
     };
     fs.writeFileSync(descFile, JSON.stringify(descriptorData, null, 2));
     
+    // 🚀 OPTIMIZATION: Update cache immediately after registration
+    updateStudentInCache(studentId, descriptors, firstName, surname);
+    
     console.log(`🎉 Registration complete for ${studentId}: ${descriptors.length} face descriptors saved\n`);
     
     return new Response(JSON.stringify({ 
@@ -456,7 +606,9 @@ export async function handleRegister(request) {
 }
 
 export async function handleLoginRecognize(request) {
+  const requestStartTime = Date.now();
   await ensureModelsLoaded();
+  
   try {
     const { image, roomId, deviceSessionId } = await request.json();
     
@@ -477,11 +629,16 @@ export async function handleLoginRecognize(request) {
       });
     }
 
+    const imgDecodeStart = Date.now();
     const img = await imageFromBase64(image);
+    console.log(`⏱️ Image decode: ${Date.now() - imgDecodeStart}ms`);
+    
+    const detectionStart = Date.now();
     const detection = await faceapi
       .detectSingleFace(img, mtcnnOptions)
       .withFaceLandmarks()
       .withFaceDescriptor();
+    console.log(`⏱️ Face detection: ${Date.now() - detectionStart}ms`);
     
     if (!detection) {
       return new Response(JSON.stringify({ message: '❌ No face detected' }), {
@@ -503,46 +660,45 @@ export async function handleLoginRecognize(request) {
     let bestMatch = null;
     let bestDistance = Infinity;
 
-    // Check all registered students (compute per-student minimum distance)
-    const descFiles = fs.readdirSync(DESC_DIR).filter(f => f.endsWith('.json'));
-
-    for (const descFile of descFiles) {
-      const studentId = descFile.replace('.json', '');
-      const data = JSON.parse(fs.readFileSync(path.join(DESC_DIR, descFile), 'utf8'));
-      const descriptors = Array.isArray(data) ? data : data.descriptors;
-      if (!Array.isArray(descriptors)) continue;
-
+    // 🚀 OPTIMIZATION: Use cached descriptors instead of reading from disk
+    const matchingStart = Date.now();
+    const cachedDescriptors = await getCachedDescriptors();
+    
+    for (const [studentId, studentData] of cachedDescriptors) {
       // compute the minimum distance for this student
       let studentMin = Infinity;
-      for (const desc of descriptors) {
-        const descriptorArray = Array.isArray(desc) ? desc : Object.values(desc);
-        const distance = faceapi.euclideanDistance(queryDescriptor, descriptorArray);
+      for (const desc of studentData.descriptors) {
+        // Descriptors are already Float32Arrays from cache
+        const distance = faceapi.euclideanDistance(queryDescriptor, desc);
         if (distance < studentMin) studentMin = distance;
       }
-
-      // debug: log per-student min distance (can be removed in production)
-      console.log(`🔎 student ${studentId} minDistance=${studentMin}`);
 
       if (studentMin < bestDistance) {
         bestDistance = studentMin;
         bestMatch = studentId;
       }
     }
+    console.log(`⏱️ Descriptor matching (${cachedDescriptors.size} students): ${Date.now() - matchingStart}ms`);
 
     console.log('✅ Recognition bestMatch:', bestMatch, 'bestDistance:', bestDistance);
 
     if (bestMatch && bestDistance < 0.5) { // Threshold for match (tuned lower)
-      // Get student name from database
+      // Get student name from database or cache
       let studentName = bestMatch; // fallback to ID if name lookup fails
-      try {
-        const studentRecord = await executeQuery('SELECT FirstName, LastName FROM students WHERE StudentID = ?', [bestMatch]);
-        if (studentRecord && studentRecord.length > 0) {
-          studentName = `${studentRecord[0].FirstName} ${studentRecord[0].LastName}`;
-
+      const cachedStudent = descriptorCache.get(bestMatch);
+      if (cachedStudent && cachedStudent.firstName) {
+        studentName = `${cachedStudent.firstName} ${cachedStudent.lastName}`.trim();
+      }
+      if (studentName === bestMatch) {
+        // Fallback to database if not in cache
+        try {
+          const studentRecord = await executeQuery('SELECT FirstName, LastName FROM students WHERE StudentID = ?', [bestMatch]);
+          if (studentRecord && studentRecord.length > 0) {
+            studentName = `${studentRecord[0].FirstName} ${studentRecord[0].LastName}`;
+          }
+        } catch (nameError) {
+          console.error('Error fetching student name:', nameError);
         }
-      } catch (nameError) {
-        console.error('Error fetching student name:', nameError);
-        // Continue with ID as fallback
       }
 
       let subjectName = 'Unknown Subject'; // Default value
@@ -550,69 +706,28 @@ export async function handleLoginRecognize(request) {
 
       // Record attendance automatically when student is recognized
       try {
-        // 🎯 AUTO-DETECT SUBJECT: Query based on room + time + enrollment + day of week
-        const scheduleQuery = await executeQuery(`
-          SELECT ss.SubjectID, ss.SectionID, ss.TeacherID, s.subject_name,
-            CASE DAYOFWEEK(CURDATE())
-              WHEN 2 THEN ss.MondayStart
-              WHEN 3 THEN ss.TuesdayStart
-              WHEN 4 THEN ss.WednesdayStart
-              WHEN 5 THEN ss.ThursdayStart
-              WHEN 6 THEN ss.FridayStart
-            END AS StartTime,
-            CASE DAYOFWEEK(CURDATE())
-              WHEN 2 THEN ss.MondayEnd
-              WHEN 3 THEN ss.TuesdayEnd
-              WHEN 4 THEN ss.WednesdayEnd
-              WHEN 5 THEN ss.ThursdayEnd
-              WHEN 6 THEN ss.FridayEnd
-            END AS EndTime
-          FROM section_subjects ss
-          JOIN subject_enrollments se ON ss.SectionID = se.SectionID 
-                                        AND ss.SubjectID = se.SubjectID
-          JOIN subjects s ON ss.SubjectID = s.SubjectID
-          WHERE se.StudentID = ?
-            AND se.Status = 'Active'
-            AND ss.RoomID = ?
-            AND CASE DAYOFWEEK(CURDATE())
-              WHEN 2 THEN ss.Monday = 1
-              WHEN 3 THEN ss.Tuesday = 1
-              WHEN 4 THEN ss.Wednesday = 1
-              WHEN 5 THEN ss.Thursday = 1
-              WHEN 6 THEN ss.Friday = 1
-            END
-            AND CURTIME() BETWEEN 
-              CASE DAYOFWEEK(CURDATE())
-                WHEN 2 THEN ss.MondayStart
-                WHEN 3 THEN ss.TuesdayStart
-                WHEN 4 THEN ss.WednesdayStart
-                WHEN 5 THEN ss.ThursdayStart
-                WHEN 6 THEN ss.FridayStart
-              END
-            AND
-              CASE DAYOFWEEK(CURDATE())
-                WHEN 2 THEN ss.MondayEnd
-                WHEN 3 THEN ss.TuesdayEnd
-                WHEN 4 THEN ss.WednesdayEnd
-                WHEN 5 THEN ss.ThursdayEnd
-                WHEN 6 THEN ss.FridayEnd
-              END
-          LIMIT 1
-        `, [bestMatch, roomId]);
-        console.log("hello bestMatch: =>",bestMatch);
-        console.log("hello roomId: =>",roomId);
-        console.log('📅 Schedule query result:', scheduleQuery);
-        if (scheduleQuery.length === 0) {
+        // 🚀 OPTIMIZATION: Use cached schedule instead of complex query
+        const scheduleStart = Date.now();
+        const scheduleResults = await getCachedScheduleForStudent(roomId, bestMatch);
+        console.log(`⏱️ Schedule lookup: ${Date.now() - scheduleStart}ms`);
+        
+        console.log("hello bestMatch: =>", bestMatch);
+        console.log("hello roomId: =>", roomId);
+        console.log('📅 Schedule query result:', scheduleResults);
+        
+        if (scheduleResults.length === 0) {
+          console.log(`⏱️ Total request time: ${Date.now() - requestStartTime}ms`);
           return new Response(JSON.stringify({ 
             message: `⚠️ No class scheduled for ${studentName} in this room at current time`,
-            studentId: bestMatch
+            studentId: bestMatch,
+            timing: Date.now() - requestStartTime
           }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
         }
         
-        const { SubjectID, SectionID, TeacherID, subject_name, StartTime } = scheduleQuery[0];
+        const { SubjectID, SectionID, TeacherID, subject_name, StartTime } = scheduleResults[0];
         subjectName = subject_name; // Update the variable
         
         console.log(`📚 Auto-detected: ${subject_name} (Subject ID: ${SubjectID}, Section: ${SectionID})`);
@@ -621,6 +736,7 @@ export async function handleLoginRecognize(request) {
         await recordAttendance(bestMatch, SubjectID, SectionID, TeacherID, StartTime);
         attendanceRecorded = true;
         console.log(`✅ Attendance recorded successfully for ${studentName}`);
+        console.log(`⏱️ Total request time: ${Date.now() - requestStartTime}ms`);
       } catch (attendanceError) {
         console.error('Attendance recording error:', attendanceError);
         // Continue with recognition but note that attendance wasn't recorded
@@ -629,7 +745,8 @@ export async function handleLoginRecognize(request) {
           studentId: bestMatch,
           subjectName: subjectName,
           imageUrl: `/attendance-login/api/face/${bestMatch}_pic1.png`,
-          error: 'attendance_failed'
+          error: 'attendance_failed',
+          timing: Date.now() - requestStartTime
         }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
