@@ -200,17 +200,25 @@ async function ensureModelsLoaded() {
   modelsLoading = true;
   const startTime = Date.now();
   try {
+    // 🚀 TURBO: Load TinyFaceDetector for fast login + MTCNN for accurate registration
     await Promise.all([
-      faceapi.nets.mtcnn.loadFromDisk(MODEL_PATH),
+      faceapi.nets.tinyFaceDetector.loadFromDisk(MODEL_PATH),  // Fast detection for login
+      faceapi.nets.mtcnn.loadFromDisk(MODEL_PATH),              // Accurate detection for registration
       faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_PATH),
       faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_PATH),
     ]);
-    console.log(`✅ MTCNN + Landmarks + Recognition models loaded in ${Date.now() - startTime}ms`);
+    console.log(`✅ TURBO: TinyFace + MTCNN + Landmarks + Recognition models loaded in ${Date.now() - startTime}ms`);
     modelsLoaded = true;
   } finally {
     modelsLoading = false;
   }
 }
+
+// 🚀 TinyFaceDetector options - FAST for login recognition (5-10x faster than MTCNN)
+const tinyFaceOptions = new faceapi.TinyFaceDetectorOptions({
+  inputSize: 416,       // 416 for better accuracy on server (can handle larger images)
+  scoreThreshold: 0.5
+});
 
 // 🚀 Preload models at server startup
 ensureModelsLoaded().catch(err => console.error('Model preload failed:', err));
@@ -633,12 +641,13 @@ export async function handleLoginRecognize(request) {
     const img = await imageFromBase64(image);
     console.log(`⏱️ Image decode: ${Date.now() - imgDecodeStart}ms`);
     
+    // 🚀 TURBO: Use TinyFaceDetector for FAST login detection (5-10x faster than MTCNN)
     const detectionStart = Date.now();
     const detection = await faceapi
-      .detectSingleFace(img, mtcnnOptions)
+      .detectSingleFace(img, tinyFaceOptions)
       .withFaceLandmarks()
       .withFaceDescriptor();
-    console.log(`⏱️ Face detection: ${Date.now() - detectionStart}ms`);
+    console.log(`⏱️ TURBO Face detection: ${Date.now() - detectionStart}ms`);
     
     if (!detection) {
       return new Response(JSON.stringify({ message: '❌ No face detected' }), {

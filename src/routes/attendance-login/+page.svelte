@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from "svelte";
+  import { loadModels, hasFacePresent, captureFrame } from '$lib/services/face.js';
 
   // 🎨 UI state for premium animations
   let isLoading = true;
@@ -62,14 +63,16 @@
   let consecutiveFailures = 0;              // Track failures for backoff
   let lastDetectionTime = 0;                // Throttle frames
   let lastSuccessTime = 0;                  // Track idle state
-  let currentDetectionInterval = 3000;      // 🚀 OPTIMIZED: Start at 3 seconds
+  let currentDetectionInterval = 500;       // 🚀 TURBO: Start at 500ms (like turnstyle)
   let consecutiveNoFace = 0;                // Track consecutive no-face detections
+  let faceModelsLoaded = false;             // Track if WASM models are loaded
   
-  // 🚀 Performance tuning constants
-  const BASE_DETECTION_INTERVAL = 3000;     // 3 seconds base interval
-  const FAST_DETECTION_INTERVAL = 1500;     // 1.5 seconds when face recently detected
-  const SLOW_DETECTION_INTERVAL = 5000;     // 5 seconds when idle (no face)
-  const NO_FACE_THRESHOLD = 5;              // Switch to slow mode after 5 no-face detections
+  // 🚀 TURBO Performance tuning constants (6x faster than before)
+  const BASE_DETECTION_INTERVAL = 500;      // 500ms base interval (was 3000ms)
+  const FAST_DETECTION_INTERVAL = 400;      // 400ms when face recently detected
+  const SLOW_DETECTION_INTERVAL = 1500;     // 1.5s when idle (was 5000ms)
+  const NO_FACE_THRESHOLD = 3;              // Switch to slow mode after 3 no-face detections
+  const MIN_DETECTION_GAP = 350;            // Minimum 350ms between detections
 
   // Settings 🔧
   // for authentication
@@ -511,21 +514,19 @@
     // Draw cropped center region - no stretching
     loginCtx.drawImage(loginVideo, srcX, srcY, srcWidth, srcHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
 
-    // 🚀 OPTIMIZATION: Reduced quality from 60% to 40% for faster transfer
-    return loginCanvas.toDataURL("image/jpeg", 0.4);
+    // 🚀 TURBO: Increased quality to 85% for better recognition (WASM handles larger images fast)
+    return loginCanvas.toDataURL("image/jpeg", 0.85);
   }
 
-  // 🎯 IMPROVED: Client-side face detection before sending to server
+  // 🎯 TURBO: Client-side face detection using new WASM-powered face service
   async function hasFaceDetected() {
-    // @ts-ignore - faceapi loaded dynamically
-    if (!window.faceapi || !loginVideo || loginVideo.readyState !== 4) {
-      return true; // If faceapi not loaded, allow sending (fallback)
+    if (!faceModelsLoaded || !loginVideo || loginVideo.readyState !== 4) {
+      return true; // If models not loaded, allow sending (fallback)
     }
 
     try {
-      // @ts-ignore - faceapi loaded dynamically
-      const detection = await window.faceapi.detectSingleFace(loginVideo, new window.faceapi.TinyFaceDetectorOptions());
-      return !!detection; // true if face detected
+      // 🚀 Use new face service with WASM backend (much faster)
+      return await hasFacePresent(loginVideo);
     } catch (err) {
       console.warn("Face detection check error:", err);
       return true; // Fallback: allow sending if detection fails
@@ -659,20 +660,34 @@
   }
 
   async function loadFaceApiModels() {
-    // @ts-ignore - faceapi loaded dynamically
-    if (!window.faceapi) {
-      // @ts-ignore - faceapi loaded dynamically
-      window.faceapi = await import('face-api.js');
+    // 🚀 TURBO: Use new WASM-powered face service for registration overlay
+    // This loads @vladmandic/face-api with WASM backend
+    try {
+      await loadModels((progress) => {
+        console.log(`📦 Face models loading: ${progress.toFixed(0)}%`);
+      });
+      faceModelsLoaded = true;
+      console.log('✅ WASM face models loaded for registration');
+      
+      // Also set window.faceapi for drawFaceBox compatibility
+      // @ts-ignore
+      window.faceapi = await import('@vladmandic/face-api');
+    } catch (err) {
+      console.warn('⚠️ Failed to load WASM models, falling back to standard:', err);
+      // Fallback to old face-api.js if WASM fails
+      // @ts-ignore
+      if (!window.faceapi) {
+        // @ts-ignore
+        window.faceapi = await import('face-api.js');
+      }
+      const modelUrl = '/models';
+      await Promise.all([
+        // @ts-ignore
+        window.faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
+        // @ts-ignore
+        window.faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl)
+      ]);
     }
-    // If you want to use a redirector, set modelUrl to '/facehandle.js' and handle requests in that file.
-    // For standard usage, keep models in /static/models and use '/models' as the URL.
-    const modelUrl = '/models'; // or '/facehandle.js' for advanced redirect
-    await Promise.all([
-      // @ts-ignore
-      window.faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
-      // @ts-ignore
-      window.faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl)
-    ]);
   }
 
   async function drawFaceBox() {
@@ -938,6 +953,20 @@
 
       loginCtx = loginCanvas.getContext("2d");
 
+      // 🚀 TURBO: Preload WASM face models for fast client-side detection
+      if (!faceModelsLoaded) {
+        console.log('🚀 Loading WASM face models...');
+        try {
+          await loadModels((progress) => {
+            console.log(`📦 Face models: ${progress.toFixed(0)}%`);
+          });
+          faceModelsLoaded = true;
+          console.log('✅ WASM face models ready - detection will be 2-3x faster');
+        } catch (err) {
+          console.warn('⚠️ WASM models failed, using fallback:', err);
+        }
+      }
+
       // Reset detection state
       isDetectionPending = false;
       consecutiveFailures = 0;
@@ -947,13 +976,13 @@
       currentDetectionInterval = BASE_DETECTION_INTERVAL;
 
       if (detectionInterval) clearInterval(detectionInterval);
-      // 🚀 OPTIMIZED: Start with 3 second interval
+      // 🚀 TURBO: Start with 500ms interval (6x faster than before!)
       detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
       
       // 🔧 Mark camera as active
       isCameraActive = true;
       isCameraStarting = false;
-      console.log(`✅ Camera active for Room: ${roomId}, interval: ${currentDetectionInterval}ms`);
+      console.log(`✅ Camera active for Room: ${roomId}, TURBO interval: ${currentDetectionInterval}ms`);
 
     } catch (err) {
       console.error("Login camera error:", err);
@@ -971,9 +1000,9 @@
       return;
     }
 
-    // 🎯 GUARD 2: Throttle frames - don't send if last request was too recent
+    // 🎯 GUARD 2: Throttle frames - minimum gap between detections (TURBO mode)
     const now = Date.now();
-    if (now - lastDetectionTime < currentDetectionInterval - 100) {
+    if (now - lastDetectionTime < MIN_DETECTION_GAP) {
       return;
     }
 
@@ -986,10 +1015,10 @@
       return;
     }
 
-    // 🎯 GUARD 4: Client-side face detection first
+    // 🎯 GUARD 4: Client-side face detection first (WASM-powered, very fast)
     const faceDetected = await hasFaceDetected();
     if (!faceDetected) {
-      // 🚀 OPTIMIZATION: Adaptive interval when no face detected
+      // 🚀 TURBO: Faster adaptive interval when no face detected
       consecutiveNoFace++;
       if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
         // Switch to slow mode - no one is in front of camera
@@ -999,11 +1028,11 @@
           detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
         }
       }
-      console.log(`👤 No face detected locally (${consecutiveNoFace}x), interval: ${currentDetectionInterval}ms`);
+      console.log(`👤 No face (WASM check) (${consecutiveNoFace}x), interval: ${currentDetectionInterval}ms`);
       return;
     }
     
-    // Face detected - reset to fast mode
+    // Face detected - reset to TURBO fast mode
     if (consecutiveNoFace > 0) {
       consecutiveNoFace = 0;
       currentDetectionInterval = FAST_DETECTION_INTERVAL;
@@ -1011,7 +1040,7 @@
         clearInterval(detectionInterval);
         detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
       }
-      console.log(`👤 Face detected! Switching to fast mode: ${currentDetectionInterval}ms`);
+      console.log(`👤 Face detected (WASM)! TURBO mode: ${currentDetectionInterval}ms`);
     }
 
     if (!loginCtx || !loginVideo.videoWidth) return;
