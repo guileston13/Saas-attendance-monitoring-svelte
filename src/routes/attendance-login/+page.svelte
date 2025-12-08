@@ -124,7 +124,7 @@
   });
 
   $: if (typeof window !== "undefined") {
-    localStorage.setItem("roomId", roomId);
+    // localStorage.setItem("roomId", roomId);
     localStorage.setItem("SERVER_URL", SERVER_URL);
   }
 
@@ -165,6 +165,7 @@
         // If roomId is not set, default to first room
         if (!roomId && roomList.length > 0) {
           roomId = roomList[0].RoomID;
+          console.log("fetch api room: ",roomId);
           localStorage.setItem("roomId", roomId);
         }
       }
@@ -995,7 +996,9 @@
     const imageData = takeLoginSnapshot();
     
     // 🔧 DEBUG: Log the roomId being sent
-    console.log(`🔍 Sending recognition request with roomId: ${roomId}, device: ${deviceSessionId}`);
+    var roomsStyle = localStorage.getItem("roomId");
+    console.log("room i id:",roomsStyle);
+    console.log(`🔍 Sending recognition request with roomId: ${roomsStyle}, device: ${deviceSessionId}`);
 
     try {
       const res = await fetch(`${SERVER_URL}/login-recognize`, {
@@ -1065,6 +1068,7 @@
   }
 
   function saveDeviceName() {
+    console.log("room->:",roomId);
     localStorage.setItem("roomId", roomId);
     alert("✅ Room saved!");
   }

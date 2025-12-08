@@ -82,12 +82,10 @@
 	};
 
 	const yearLevels = [
-		"Grade 7",
-		"Grade 8",
-		"Grade 9",
-		"Grade 10",
-		"Grade 11",
-		"Grade 12",
+		"1st Year",
+		"2nd Year",
+		"3rd Year",
+		"4th Year"
 	];
 
 	// Filter students based on search term
@@ -197,7 +195,7 @@
 </script>
 
 <svelte:head>
-	\t<title>Students - School Management System</title>
+	<title>Students - School Management System</title>
 </svelte:head>
 
 <!-- Premium Loading Screen -->

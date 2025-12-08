@@ -393,6 +393,7 @@
 						tabindex="0"
 					>
 						<div class="card-icon">🏫</div>
+
 						<h3>{section.SectionName}</h3>
 						<!-- <p class="card-subtitle">{section.YearLevel}</p> -->
 						<div class="card-stats">
@@ -554,7 +555,7 @@
 									<tr>
 										<td class="student-cell">
 											<div class="student-info">
-												<span class="student-name">{student.FirstName} {student.LastName}</span>
+												<span class="student-name">{student.LastName}, {student.FirstName}</span>
 												<span class="student-id">{student.StudentID}</span>
 											</div>
 										</td>
