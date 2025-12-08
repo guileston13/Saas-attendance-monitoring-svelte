@@ -666,28 +666,73 @@ export async function handleLoginRecognize(request) {
     const queryDescriptor = croppedDescriptor || detection.descriptor;
     console.log(`🔍 Login: Using ${croppedDescriptor ? 'cropped face' : 'original'} descriptor for matching`);
     
+    /**
+     * 🔥 TURBO: Fast squared distance (no sqrt needed for comparison)
+     */
+    function fastDistance(a, b) {
+      let sum = 0;
+      for (let i = 0; i < a.length; i++) {
+        const d = a[i] - b[i];
+        sum += d * d;
+      }
+      return sum; // squared distance
+    }
+
+    /**
+     * 🔥 TURBO: Quick reject using first 8 dimensions only
+     * If partial distance already exceeds bestSoFar, reject immediately
+     */
+    function quickReject(a, b, bestSoFar) {
+      let s = 0;
+      for (let i = 0; i < 8; i++) {
+        const d = a[i] - b[i];
+        s += d * d;
+        if (s > bestSoFar) return true; // reject student immediately
+      }
+      return false;
+    }
+
+    /**
+     * 🔥 TURBO: Full distance with early exit
+     */
+    function fastDistanceEarly(a, b, threshold) {
+      let sum = 0;
+      for (let i = 0; i < a.length; i++) {
+        const d = a[i] - b[i];
+        sum += d * d;
+        if (sum > threshold) return Infinity; // early exit if already worse than best
+      }
+      return sum;
+    }
+
     let bestMatch = null;
     let bestDistance = Infinity;
 
-    // 🚀 OPTIMIZATION: Use cached descriptors instead of reading from disk
+    // 🚀 TURBO: Use cached descriptors + fast distance functions
     const matchingStart = Date.now();
     const cachedDescriptors = await getCachedDescriptors();
     
     for (const [studentId, studentData] of cachedDescriptors) {
-      // compute the minimum distance for this student
       let studentMin = Infinity;
+      
       for (const desc of studentData.descriptors) {
-        // Descriptors are already Float32Arrays from cache
-        const distance = faceapi.euclideanDistance(queryDescriptor, desc);
-        if (distance < studentMin) studentMin = distance;
-      }
-
-      if (studentMin < bestDistance) {
-        bestDistance = studentMin;
-        bestMatch = studentId;
+        // 🔥 Quick reject using first 8 dimensions
+        if (quickReject(queryDescriptor, desc, studentMin)) continue;
+        
+        // 🔥 Full distance with early exit
+        const dist = fastDistanceEarly(queryDescriptor, desc, studentMin);
+        
+        if (dist < studentMin) {
+          studentMin = dist;
+          if (dist < bestDistance) {
+            bestDistance = dist;
+            bestMatch = studentId;
+          }
+        }
       }
     }
-    console.log(`⏱️ Descriptor matching (${cachedDescriptors.size} students): ${Date.now() - matchingStart}ms`);
+    
+    console.log(`⚡ TURBO matching (${cachedDescriptors.size} students): ${Date.now() - matchingStart}ms`);
 
     console.log('✅ Recognition bestMatch:', bestMatch, 'bestDistance:', bestDistance);
 
