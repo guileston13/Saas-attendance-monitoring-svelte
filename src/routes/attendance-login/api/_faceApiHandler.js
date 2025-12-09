@@ -217,7 +217,7 @@ async function ensureModelsLoaded() {
 // 🚀 TinyFaceDetector options - FAST for login recognition (5-10x faster than MTCNN)
 const tinyFaceOptions = new faceapi.TinyFaceDetectorOptions({
   inputSize: 416,       // 416 for better accuracy on server (can handle larger images)
-  scoreThreshold: 0.5
+  scoreThreshold: 0.6
 });
 
 // 🚀 Preload models at server startup
@@ -248,6 +248,62 @@ const mtcnnOptions = new faceapi.MtcnnOptions({
 // Standard face crop size for consistent descriptor extraction
 const FACE_CROP_SIZE = 160;
 const FACE_PADDING = 0.3; // 30% padding around detected face
+
+// 🚀 TURBO: Preprocessing constants (same as turnstyle)
+const TARGET_WIDTH = 640;
+const TARGET_HEIGHT = 480;
+const TARGET_ASPECT = TARGET_WIDTH / TARGET_HEIGHT;
+
+/**
+ * 🚀 TURBO: Center-crop and convert to grayscale for consistent face detection
+ * Same as turnstyle preprocessing - no face cropping, just grayscale for speed + accuracy
+ */
+function preprocessImage(img) {
+  const canvas = new Canvas(TARGET_WIDTH, TARGET_HEIGHT);
+  const ctx = canvas.getContext('2d');
+  
+  const srcWidth = img.width || TARGET_WIDTH;
+  const srcHeight = img.height || TARGET_HEIGHT;
+  const srcAspect = srcWidth / srcHeight;
+  
+  // Calculate center crop dimensions
+  let cropWidth, cropHeight, cropX, cropY;
+  
+  if (srcAspect > TARGET_ASPECT) {
+    // Source is wider - crop sides
+    cropHeight = srcHeight;
+    cropWidth = srcHeight * TARGET_ASPECT;
+    cropX = (srcWidth - cropWidth) / 2;
+    cropY = 0;
+  } else {
+    // Source is taller - crop top/bottom
+    cropWidth = srcWidth;
+    cropHeight = srcWidth / TARGET_ASPECT;
+    cropX = 0;
+    cropY = (srcHeight - cropHeight) / 2;
+  }
+  
+  // Draw center-cropped and scaled image
+  ctx.drawImage(
+    img,
+    cropX, cropY, cropWidth, cropHeight,
+    0, 0, TARGET_WIDTH, TARGET_HEIGHT
+  );
+  
+  // Apply grayscale for consistent face detection
+  const imageData = ctx.getImageData(0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    data[i] = gray;     // R
+    data[i + 1] = gray; // G
+    data[i + 2] = gray; // B
+    // Alpha stays the same
+  }
+  ctx.putImageData(imageData, 0, 0);
+  
+  return canvas;
+}
 
 /**
  * Crop face from image based on detection - SIMPLE SQUARE CROP
@@ -641,10 +697,15 @@ export async function handleLoginRecognize(request) {
     const img = await imageFromBase64(image);
     console.log(`⏱️ Image decode: ${Date.now() - imgDecodeStart}ms`);
     
+    // 🚀 TURBO: Preprocess image with grayscale (like turnstyle - no face cropping!)
+    const preprocessStart = Date.now();
+    const preprocessedImg = preprocessImage(img);
+    console.log(`⏱️ Grayscale preprocessing: ${Date.now() - preprocessStart}ms`);
+    
     // 🚀 TURBO: Use TinyFaceDetector for FAST login detection (5-10x faster than MTCNN)
     const detectionStart = Date.now();
     const detection = await faceapi
-      .detectSingleFace(img, tinyFaceOptions)
+      .detectSingleFace(preprocessedImg, tinyFaceOptions)
       .withFaceLandmarks()
       .withFaceDescriptor();
     console.log(`⏱️ TURBO Face detection: ${Date.now() - detectionStart}ms`);
@@ -658,13 +719,9 @@ export async function handleLoginRecognize(request) {
     
     console.log(`🔍 Login: Face detected with confidence ${detection.detection.score.toFixed(3)}`);
     
-    // 🎯 CROP THE FACE for better matching accuracy (same as registration)
-    const croppedFace = cropAlignedFace(img, detection);
-    const croppedDescriptor = await extractDescriptorFromCrop(croppedFace);
-    
-    // Use cropped descriptor if available, fallback to original
-    const queryDescriptor = croppedDescriptor || detection.descriptor;
-    console.log(`🔍 Login: Using ${croppedDescriptor ? 'cropped face' : 'original'} descriptor for matching`);
+    // 🚀 TURBO: Use descriptor directly from preprocessed image (no face cropping like turnstyle)
+    const queryDescriptor = detection.descriptor;
+    console.log(`🔍 Login: Using grayscale preprocessed descriptor (turnstyle style)`);
     
     /**
      * 🔥 TURBO: Fast squared distance (no sqrt needed for comparison)
