@@ -73,6 +73,11 @@
   const SLOW_DETECTION_INTERVAL = 1500;     // 1.5s when idle (was 5000ms)
   const NO_FACE_THRESHOLD = 3;              // Switch to slow mode after 3 no-face detections
   const MIN_DETECTION_GAP = 350;            // Minimum 350ms between detections
+  
+  // 🎯 Face recognition control state
+  let isFaceRecognitionEnabled = false;     // Face recognition on/off state
+  let faceRecognitionTimer = null;          // 1-second delay timer
+  let lastCameraState = false;              // Track camera on/off state from Raspberry Pi
 
   // Settings 🔧
   // for authentication
@@ -188,14 +193,20 @@
     }
 
     eventSource = new EventSource("/api/stream");
+    eventSource.onopen = () => {
+      console.log("✅ SSE connection established!");
+    };
     eventSource.onmessage = (event) => {
-      console.log("📡 SSE message received:", event.data);
+      console.log("📡 SSE RAW message received:", event.data);
       try {
         const data = JSON.parse(event.data);
+        console.log("📡 SSE PARSED data:", data);
         
         // 🔧 IMPROVED: Use both roomId AND deviceSessionId for filtering
         const myRoomDevice = `room${roomId}`;
         const mySessionDevice = deviceSessionId;
+        
+        console.log(`🔍 SSE filtering: target=${data.device}, myRoom=${myRoomDevice}, mySession=${mySessionDevice}, roomId=${roomId}`);
         
         // Only react if message is for this device's room, session, or "all"
         if (data.device) {
@@ -203,7 +214,9 @@
           const isForMe = targetDevice === 'all' || 
                           targetDevice === myRoomDevice || 
                           targetDevice === mySessionDevice ||
-                          targetDevice === `device${roomId}`; // Legacy support
+                          targetDevice === `device${roomId}` || // Legacy support
+                          (targetDevice === 'device1' && roomId == '1') || // Fallback for device1
+                          (targetDevice === 'device2' && roomId == '2'); // Fallback for device2
           
           if (!isForMe) {
             console.log(`📡 Ignoring SSE for ${targetDevice} (I am room:${roomId}, session:${deviceSessionId})`);
@@ -211,14 +224,71 @@
           }
         }
 
+        console.log(`✅ SSE event accepted: ${data.status} for device ${data.device || 'all'}`);
+        
         if (data.status === "camera_started") {
           console.log(`🎥 Camera started for room ${roomId}!`);
+          lastCameraState = true;
+          
+          // 🎯 CRITICAL: Show login page so video element is visible
+          showLoginPage = true;
+          currentScreen = 'login';
+          
+          // 🎯 Reset timeout counter when camera starts (prevent immediate timeout)
+          lastSuccessTime = Date.now();
+          console.log(`⏱️ Timeout reset - lastSuccessTime: ${lastSuccessTime}`);
+          
+          // 🎯 Show camera started message
+          loginMessage = "🎥 Camera activated - Face recognition starting...";
+          loginMessageColor = "blue";
+          
+          // Start camera immediately
           startLoginCamera();
+          
+          // 🎯 Enable face recognition after 1 second delay (if camera stays on)
+          if (faceRecognitionTimer) clearTimeout(faceRecognitionTimer);
+          console.log('⏱️ Starting 1-second timer for face recognition...');
+          faceRecognitionTimer = setTimeout(() => {
+            console.log(`⏱️ Timer fired! lastCameraState=${lastCameraState}, isCameraActive=${isCameraActive}`);
+            if (lastCameraState) { // Only enable if camera still on
+              isFaceRecognitionEnabled = true;
+              console.log('✅ Face recognition ENABLED after 1s delay');
+              
+              // 🎯 Clear the activation message once face recognition starts
+              loginMessage = "";
+              loginMessageColor = "black";
+            } else {
+              console.log('❌ Camera stopped before timer fired, NOT enabling face recognition');
+            }
+          }, 1000);
         }
 
         if (data.status === "camera_stopped") {
           console.log(`🛑 Camera stopped for room ${roomId}!`);
+          lastCameraState = false;
+          
+          // Cancel the 1-second timer if camera stopped before delay
+          if (faceRecognitionTimer) {
+            clearTimeout(faceRecognitionTimer);
+            faceRecognitionTimer = null;
+          }
+          
+          // 🎯 CRITICAL: Clear messages FIRST before anything else
+          loginMessage = "";
+          loginMessageColor = "black";
+          loginImageUrl = "";
+          
+          // 🎯 Disable face recognition immediately
+          isFaceRecognitionEnabled = false;
+          
+          // Stop camera stream and interval (but keep display visible)
           stopLoginCamera();
+          
+          // 🎯 Keep login page visible - just stop the stream
+          // showLoginPage = false; // REMOVED: Keep display visible
+          // currentScreen = 'main'; // REMOVED: Stay on login screen
+          
+          console.log('🧹 Camera stream stopped - display remains visible');
         }
       } catch (err) {
         console.warn("⚠️ Invalid SSE message:", event.data);
@@ -233,6 +303,11 @@
   onDestroy(() => {
     if (typeof window === 'undefined') return;
     if (eventSource) eventSource.close();
+    // 🎯 Clean up face recognition timer
+    if (faceRecognitionTimer) {
+      clearTimeout(faceRecognitionTimer);
+      faceRecognitionTimer = null;
+    }
     // 🔧 Clean up camera on component destroy
     stopLoginCamera();
     window.removeEventListener('scroll', () => {});
@@ -878,10 +953,19 @@
   }
   
   async function startLoginCamera() {
-    // 🔧 GUARD: Prevent multiple simultaneous camera starts
-    if (isCameraActive || isCameraStarting) {
-      console.log(`⚠️ Camera already ${isCameraActive ? 'active' : 'starting'}, ignoring duplicate start request`);
+    // 🔧 GUARD: Prevent multiple simultaneous camera starts (but allow restart if stopped)
+    if (isCameraStarting) {
+      console.log(`⚠️ Camera already starting, ignoring duplicate start request`);
       return;
+    }
+    
+    // 🎯 If camera is already active, just log and continue (allow restart)
+    if (isCameraActive) {
+      console.log(`🔄 Camera already active - restarting for fresh session`);
+      // Stop current camera first
+      stopLoginCamera();
+      // Small delay to ensure cleanup
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
     isCameraStarting = true;
@@ -982,6 +1066,10 @@
       // 🔧 Mark camera as active
       isCameraActive = true;
       isCameraStarting = false;
+      
+      // 🎯 Note: Face recognition timer is controlled by SSE handler (camera_started event)
+      // Do NOT start another timer here to avoid duplicates
+      
       console.log(`✅ Camera active for Room: ${roomId}, TURBO interval: ${currentDetectionInterval}ms`);
 
     } catch (err) {
@@ -993,7 +1081,34 @@
     }
   }
 
+  /**
+   * 🎯 Reset snapshot variables when face recognition is disabled
+   * Flushes all cached data for clean restart when enabled again
+   */
+  function resetSnapshotVariables() {
+    loginMessage = "";
+    loginMessageColor = "black";
+    loginImageUrl = "";
+    isDetectionPending = false;
+    consecutiveFailures = 0;
+    consecutiveNoFace = 0;
+    lastDetectionTime = 0;
+    lastSuccessTime = 0; // Reset to 0 when stopping (not Date.now())
+    currentDetectionInterval = BASE_DETECTION_INTERVAL;
+    console.log('🧹 Snapshot variables reset - ready for clean restart');
+  }
+
   async function sendFrameForDetection() {
+    // 🎯 GUARD 0: Check if face recognition is enabled
+    if (!isFaceRecognitionEnabled) {
+      // Only log once every 5 seconds to avoid spam
+      if (!this._lastDisabledLog || Date.now() - this._lastDisabledLog > 5000) {
+        console.log(`⏸️ Face recognition disabled (isFaceRecognitionEnabled=${isFaceRecognitionEnabled}, isCameraActive=${isCameraActive}, lastCameraState=${lastCameraState})`);
+        this._lastDisabledLog = Date.now();
+      }
+      return;
+    }
+    
     // 🎯 GUARD 1: Prevent request queue buildup
     if (isDetectionPending) {
       console.log("⏳ Detection already pending, skipping frame...");
@@ -1007,11 +1122,10 @@
     }
 
     // 🎯 GUARD 3: Idle timeout - if no success for 120 seconds, stop polling
-    if (now - lastSuccessTime > 120000) {
+    if (lastSuccessTime > 0 && now - lastSuccessTime > 120000) {
       console.log("⏱️ Idle timeout reached (120s), stopping auto-detection");
       stopLoginCamera();
-      loginMessage = "⏱️ Timeout: No face recognized in 2 minutes";
-      loginMessageColor = "orange";
+      // Don't set message here - stopLoginCamera flow will clear everything
       return;
     }
 
@@ -1069,10 +1183,15 @@
       consecutiveFailures = 0;
       currentDetectionInterval = BASE_DETECTION_INTERVAL; // Reset to base interval
 
-      // Directly set the recognition result
-      loginMessage = data.message;
-      loginMessageColor = data.message && data.message.includes("Welcome") ? "green" : "red";
-      loginImageUrl = data.imageUrl || "";
+      // Only set recognition result if face recognition is still enabled AND camera is active
+      if (isFaceRecognitionEnabled && isCameraActive) {
+        // Directly set the recognition result
+        loginMessage = data.message;
+        loginMessageColor = data.message && data.message.includes("Welcome") ? "green" : "red";
+        loginImageUrl = data.imageUrl || "";
+      } else {
+        console.log('⏸️ Ignoring recognition result - camera/recognition disabled');
+      }
       
       // Log timing if available
       if (data.timing) {
@@ -1094,8 +1213,8 @@
       
       console.warn(`⚠️ Failure #${consecutiveFailures}, next interval: ${currentDetectionInterval}ms`);
 
-      // Only show error after multiple failures
-      if (consecutiveFailures > 3) {
+      // Only show error after multiple failures (if camera still active)
+      if (consecutiveFailures > 3 && isFaceRecognitionEnabled && isCameraActive) {
         loginMessage = "❌ Server error. Retrying...";
         loginMessageColor = "red";
       }
@@ -1112,19 +1231,32 @@
   }
   function stopLoginCamera() {
     console.log(`🛑 Stopping camera for Room: ${roomId}`);
+    
+    // 🔧 Reset camera state FIRST
+    isCameraActive = false;
+    isCameraStarting = false;
+    isFaceRecognitionEnabled = false;
+    
+    // Stop detection interval
     if (detectionInterval) {
       clearInterval(detectionInterval);
       detectionInterval = null;
     }
+    
+    // Stop camera stream
     if (loginStream) {
       loginStream.getTracks().forEach((t) => t.stop());
       loginStream = null;
     }
     if (loginVideo) loginVideo.srcObject = null;
     
-    // 🔧 Reset camera state
-    isCameraActive = false;
-    isCameraStarting = false;
+    // 🎯 Clear all messages and reset variables
+    loginMessage = "";
+    loginMessageColor = "black";
+    loginImageUrl = "";
+    resetSnapshotVariables();
+    
+    console.log('✅ Camera stopped and all data cleared');
   }
 
   function saveDeviceName() {
