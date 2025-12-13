@@ -21,6 +21,16 @@ if (!fs.existsSync(DESC_DIR)) fs.mkdirSync(DESC_DIR, { recursive: true });
 if (!fs.existsSync(MODEL_PATH)) fs.mkdirSync(MODEL_PATH, { recursive: true });
 
 // ============================================================================
+// 🚀 FIX: No-cache headers to prevent stale responses
+// ============================================================================
+const NO_CACHE_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0'
+};
+
+// ============================================================================
 // 🚀 PERFORMANCE OPTIMIZATION: In-memory descriptor cache
 // ============================================================================
 let descriptorCache = new Map(); // Map<studentId, {descriptors, metadata}>
@@ -639,7 +649,7 @@ export async function handleLoginRecognize(request) {
         skipped: true 
       }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: NO_CACHE_HEADERS
       });
     }
     
@@ -660,14 +670,14 @@ export async function handleLoginRecognize(request) {
       if (!image) {
         return new Response(JSON.stringify({ message: '❌ No image provided' }), {
           status: 400,
-          headers: { 'Content-Type': 'application/json' }
+          headers: NO_CACHE_HEADERS
         });
       }
       
       if (!roomId) {
         return new Response(JSON.stringify({ message: '❌ Room not configured' }), {
           status: 400,
-          headers: { 'Content-Type': 'application/json' }
+          headers: NO_CACHE_HEADERS
         });
       }
 
@@ -686,7 +696,7 @@ export async function handleLoginRecognize(request) {
     if (!detection) {
       return new Response(JSON.stringify({ message: '❌ No face detected' }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: NO_CACHE_HEADERS
       });
     }
     
@@ -811,7 +821,7 @@ export async function handleLoginRecognize(request) {
             timing: Date.now() - requestStartTime
           }), {
             status: 200,
-            headers: { 'Content-Type': 'application/json' }
+            headers: NO_CACHE_HEADERS
           });
         }
         
@@ -837,7 +847,7 @@ export async function handleLoginRecognize(request) {
           timing: Date.now() - requestStartTime
         }), {
           status: 200,
-          headers: { 'Content-Type': 'application/json' }
+          headers: NO_CACHE_HEADERS
         });
       }
 
@@ -850,12 +860,12 @@ export async function handleLoginRecognize(request) {
           attendanceRecorded: attendanceRecorded
         }), {
           status: 200,
-          headers: { 'Content-Type': 'application/json' }
+          headers: NO_CACHE_HEADERS
         });
     } else {
       return new Response(JSON.stringify({ message: '🚫 Stranger detected' }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: NO_CACHE_HEADERS
       });
     }
     
@@ -870,7 +880,7 @@ export async function handleLoginRecognize(request) {
     console.error('Recognition error:', err);
     return new Response(JSON.stringify({ message: '❌ Recognition failed' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: NO_CACHE_HEADERS
     });
   }
 }

@@ -63,6 +63,10 @@
   let lastRecognizedStudent = null;
   const RECOGNITION_COOLDOWN_MS = 4000; // 4 second cooldown after successful recognition
   
+  // 🚀 FIX: Request tracking to prevent stale/cached responses
+  let currentRequestId = 0; // Incremented for each request
+  let cameraSessionActive = false; // Track if camera session is still active
+  
   // 🔧 Camera state guard - prevent multiple simultaneous starts
   let isCameraActive = false;
   let isCameraStarting = false;
@@ -991,6 +995,7 @@
       // 🔧 Mark camera as active
       isCameraActive = true;
       isCameraStarting = false;
+      cameraSessionActive = true; // 🚀 FIX: Mark session as active for request tracking
       console.log(`✅ Camera active for Room: ${roomId}, TURBO interval: ${currentDetectionInterval}ms`);
 
     } catch (err) {
@@ -1070,12 +1075,23 @@
     // 🔧 DEBUG: Log the roomId being sent
     console.log(`🔍 Sending recognition request with roomId: ${roomId}, device: ${deviceSessionId}`);
 
+    // 🚀 FIX: Track this request with a unique ID
+    const thisRequestId = ++currentRequestId;
+    
     try {
       const res = await fetch(`${SERVER_URL}/login-recognize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageData, roomId, deviceSessionId })
+        body: JSON.stringify({ image: imageData, roomId, deviceSessionId, requestId: thisRequestId }),
+        cache: "no-store" // 🚀 FIX: Prevent browser caching of recognition responses
       });
+
+      // 🚀 FIX: Check if camera was stopped or newer request was sent while waiting
+      if (!cameraSessionActive || thisRequestId !== currentRequestId) {
+        console.log(`🚫 Ignoring stale response (request ${thisRequestId}, current ${currentRequestId}, active: ${cameraSessionActive})`);
+        isDetectionPending = false;
+        return;
+      }
 
       const data = await res.json();
 
@@ -1152,6 +1168,11 @@
   }
   function stopLoginCamera() {
     console.log(`🛑 Stopping camera for Room: ${roomId}`);
+    
+    // 🚀 FIX: Immediately mark session as inactive to reject pending responses
+    cameraSessionActive = false;
+    currentRequestId++; // Invalidate any pending requests
+    
     if (detectionInterval) {
       clearInterval(detectionInterval);
       detectionInterval = null;
@@ -1174,6 +1195,11 @@
     // 🚀 TURBO: Reset recognition cooldown
     recognitionCooldown = false;
     lastRecognizedStudent = null;
+    
+    // 🚀 FIX: Clear the message box immediately when camera stops
+    loginMessage = "";
+    loginImageUrl = "";
+    isDetectionPending = false;
   }
 
   function saveDeviceName() {
