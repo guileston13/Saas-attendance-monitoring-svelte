@@ -54,7 +54,11 @@
   let detectionInterval;
   let loginImageUrl = "";
   
-  // 🔧 Camera state guard - prevent multiple simultaneous starts
+  // � TURBO: Auto-clear message timeout
+  let messageTimeout = null;
+  const MESSAGE_DISPLAY_DURATION = 3000; // Show message for 3 seconds then clear
+  
+  // �🔧 Camera state guard - prevent multiple simultaneous starts
   let isCameraActive = false;
   let isCameraStarting = false;
 
@@ -1136,14 +1140,37 @@
       consecutiveFailures = 0;
       currentDetectionInterval = BASE_DETECTION_INTERVAL; // Reset to base interval
 
-      // Directly set the recognition result
+      // 🚀 TURBO: Show message immediately, auto-clear after 3 seconds
+      // Clear any existing timeout first
+      if (messageTimeout) {
+        clearTimeout(messageTimeout);
+        messageTimeout = null;
+      }
+      
+      // Set the recognition result immediately
       loginMessage = data.message;
-      loginMessageColor = data.message && data.message.includes("Welcome") ? "green" : "red";
       loginImageUrl = data.imageUrl || "";
+      
+      // Determine color based on message type
+      if (data.message && (data.message.includes("Welcome") || data.message.includes("Already present"))) {
+        loginMessageColor = "green";
+        
+        // 🚀 TURBO: Auto-clear success message after 3 seconds for next student
+        messageTimeout = setTimeout(() => {
+          loginMessage = "";
+          loginImageUrl = "";
+          loginMessageColor = "black";
+          console.log("🔄 Message auto-cleared for next student");
+        }, MESSAGE_DISPLAY_DURATION);
+      } else if (data.message && data.message.includes("⚠️")) {
+        loginMessageColor = "orange";
+      } else {
+        loginMessageColor = "red";
+      }
       
       // Log timing if available
       if (data.timing) {
-        console.log(`✅ Recognition response (${data.timing}ms server): ${data.message}`);
+        console.log(`✅ Recognition response (${data.timing}ms server): ${data.message}${data.cached ? ' [CACHED]' : ''}`);
       } else {
         console.log("✅ Recognition response:", data.message);
       }
@@ -1183,6 +1210,12 @@
     // 🔧 Reset camera state FIRST
     isCameraActive = false;
     isCameraStarting = false;
+    
+    // 🚀 TURBO: Clear message timeout
+    if (messageTimeout) {
+      clearTimeout(messageTimeout);
+      messageTimeout = null;
+    }
     
     // Stop detection interval
     if (detectionInterval) {
