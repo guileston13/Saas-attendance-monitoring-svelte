@@ -25,14 +25,8 @@ if (!fs.existsSync(MODEL_PATH)) fs.mkdirSync(MODEL_PATH, { recursive: true });
 // ============================================================================
 let descriptorCache = new Map(); // Map<studentId, {descriptors, metadata}>
 let descriptorCacheLoadedAt = 0;
-const DESCRIPTOR_CACHE_TTL = 30 * 60 * 1000; // 30 minutes cache TTL (was 5min - increased for performance)
+const DESCRIPTOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
 let isLoadingDescriptorCache = false;
-
-// ============================================================================
-// 🚀 TURBO: Today's attendance cache - skip face recognition for students already present
-// ============================================================================
-let todayAttendanceCache = new Map(); // Map<cacheKey, {students: Set<studentId>, loadedAt}>
-const ATTENDANCE_CACHE_TTL = 60 * 1000; // 1 minute TTL (refresh every minute)
 
 /**
  * Preload all student descriptors into memory cache
@@ -114,7 +108,7 @@ function invalidateDescriptorCache() {
 // 🚀 PERFORMANCE OPTIMIZATION: Schedule cache
 // ============================================================================
 let scheduleCache = new Map(); // Map<cacheKey, {schedules, loadedAt}>
-const SCHEDULE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes TTL (was 2min - schedules don't change mid-class)
+const SCHEDULE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes TTL
 
 /**
  * Get cached schedule for a room on current day for a specific student
@@ -162,81 +156,6 @@ async function getCachedScheduleForStudent(roomId, studentId) {
     if (!s.StartTime || !s.EndTime) return false;
     return currentTime >= s.StartTime && currentTime <= s.EndTime;
   });
-}
-
-/**
- * 🚀 TURBO: Get today's attendance for a room (cached)
- * Returns Set of studentIds who already attended today for current schedule
- */
-async function getTodayAttendanceForRoom(roomId) {
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const cacheKey = `attendance_${roomId}_${today}_${dayOfWeek}`;
-  
-  let cached = todayAttendanceCache.get(cacheKey);
-  
-  // Check if cache is valid (1 minute TTL)
-  if (!cached || (Date.now() - cached.loadedAt) > ATTENDANCE_CACHE_TTL) {
-    // Query all students who attended today in this room's current schedules
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayColumn = dayNames[dayOfWeek];
-    const startColumn = `${dayColumn}Start`;
-    const endColumn = `${dayColumn}End`;
-    
-    const query = `
-      SELECT DISTINCT ar.student_id, ar.login_time, ar.status, ss.SubjectID, ss.SectionID, s.subject_name
-      FROM attendance_records ar
-      JOIN section_subjects ss ON ar.subject_id = ss.SubjectID AND ar.section_id = ss.SectionID
-      JOIN subjects s ON ss.SubjectID = s.SubjectID
-      WHERE ar.attendance_date = ?
-        AND ss.RoomID = ?
-        AND ss.${dayColumn} = 1
-        AND ? >= ss.${startColumn}
-        AND ? <= ss.${endColumn}
-    `;
-    
-    try {
-      const results = await executeQuery(query, [today, roomId, currentTime, currentTime]);
-      const attendanceMap = new Map();
-      
-      for (const row of results) {
-        attendanceMap.set(row.student_id, {
-          loginTime: row.login_time,
-          status: row.status,
-          subjectId: row.SubjectID,
-          sectionId: row.SectionID,
-          subjectName: row.subject_name
-        });
-      }
-      
-      cached = { students: attendanceMap, loadedAt: Date.now() };
-      todayAttendanceCache.set(cacheKey, cached);
-      console.log(`🚀 Attendance cache loaded for room ${roomId}: ${attendanceMap.size} students already present`);
-    } catch (err) {
-      console.error('⚠️ Failed to load attendance cache:', err.message);
-      return new Map();
-    }
-  }
-  
-  return cached.students;
-}
-
-/**
- * Add student to today's attendance cache (call after recording attendance)
- */
-function updateTodayAttendanceCache(roomId, studentId, loginTime, status, subjectId, sectionId, subjectName) {
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const cacheKey = `attendance_${roomId}_${today}_${dayOfWeek}`;
-  
-  let cached = todayAttendanceCache.get(cacheKey);
-  if (cached) {
-    cached.students.set(studentId, { loginTime, status, subjectId, sectionId, subjectName });
-    console.log(`🔄 Attendance cache updated: ${studentId} added to room ${roomId}`);
-  }
 }
 
 // Preload caches on module load (server startup)
@@ -295,10 +214,10 @@ async function ensureModelsLoaded() {
   }
 }
 
-// 🚀 TinyFaceDetector options - TURBO for login recognition (inputSize 224 = fastest)
+// 🚀 TinyFaceDetector options - FAST for login recognition (5-10x faster than MTCNN)
 const tinyFaceOptions = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 224,       // 224 for maximum speed (was 416 - saves 100-200ms)
-  scoreThreshold: 0.5   // Slightly lower threshold for faster matching
+  inputSize: 416,       // 416 for better accuracy on server (can handle larger images)
+  scoreThreshold: 0.5
 });
 
 // 🚀 Preload models at server startup
@@ -329,62 +248,6 @@ const mtcnnOptions = new faceapi.MtcnnOptions({
 // Standard face crop size for consistent descriptor extraction
 const FACE_CROP_SIZE = 160;
 const FACE_PADDING = 0.3; // 30% padding around detected face
-
-// 🚀 TURBO: Preprocessing constants (same as turnstyle)
-const TARGET_WIDTH = 640;
-const TARGET_HEIGHT = 480;
-const TARGET_ASPECT = TARGET_WIDTH / TARGET_HEIGHT;
-
-/**
- * 🚀 TURBO: Center-crop and convert to grayscale for consistent face detection
- * Same as turnstyle preprocessing - no face cropping, just grayscale for speed + accuracy
- */
-function preprocessImage(img) {
-  const canvas = new Canvas(TARGET_WIDTH, TARGET_HEIGHT);
-  const ctx = canvas.getContext('2d');
-  
-  const srcWidth = img.width || TARGET_WIDTH;
-  const srcHeight = img.height || TARGET_HEIGHT;
-  const srcAspect = srcWidth / srcHeight;
-  
-  // Calculate center crop dimensions
-  let cropWidth, cropHeight, cropX, cropY;
-  
-  if (srcAspect > TARGET_ASPECT) {
-    // Source is wider - crop sides
-    cropHeight = srcHeight;
-    cropWidth = srcHeight * TARGET_ASPECT;
-    cropX = (srcWidth - cropWidth) / 2;
-    cropY = 0;
-  } else {
-    // Source is taller - crop top/bottom
-    cropWidth = srcWidth;
-    cropHeight = srcWidth / TARGET_ASPECT;
-    cropX = 0;
-    cropY = (srcHeight - cropHeight) / 2;
-  }
-  
-  // Draw center-cropped and scaled image
-  ctx.drawImage(
-    img,
-    cropX, cropY, cropWidth, cropHeight,
-    0, 0, TARGET_WIDTH, TARGET_HEIGHT
-  );
-  
-  // Apply grayscale for consistent face detection
-  const imageData = ctx.getImageData(0, 0, TARGET_WIDTH, TARGET_HEIGHT);
-  const data = imageData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-    data[i] = gray;     // R
-    data[i + 1] = gray; // G
-    data[i + 2] = gray; // B
-    // Alpha stays the same
-  }
-  ctx.putImageData(imageData, 0, 0);
-  
-  return canvas;
-}
 
 /**
  * Crop face from image based on detection - SIMPLE SQUARE CROP
@@ -778,14 +641,11 @@ export async function handleLoginRecognize(request) {
     const img = await imageFromBase64(image);
     console.log(`⏱️ Image decode: ${Date.now() - imgDecodeStart}ms`);
     
-    // 🚀 TURBO: Skip grayscale preprocessing - direct detection is faster
-    // Client-side already confirmed face presence, no need for extra processing
-    
     // 🚀 TURBO: Use TinyFaceDetector for FAST login detection (5-10x faster than MTCNN)
-    // Removed .withFaceLandmarks() - not needed for descriptor matching, saves 50-100ms
     const detectionStart = Date.now();
     const detection = await faceapi
       .detectSingleFace(img, tinyFaceOptions)
+      .withFaceLandmarks()
       .withFaceDescriptor();
     console.log(`⏱️ TURBO Face detection: ${Date.now() - detectionStart}ms`);
     
@@ -798,8 +658,13 @@ export async function handleLoginRecognize(request) {
     
     console.log(`🔍 Login: Face detected with confidence ${detection.detection.score.toFixed(3)}`);
     
-    // 🚀 TURBO: Use descriptor directly (no preprocessing needed)
-    const queryDescriptor = detection.descriptor;
+    // 🎯 CROP THE FACE for better matching accuracy (same as registration)
+    const croppedFace = cropAlignedFace(img, detection);
+    const croppedDescriptor = await extractDescriptorFromCrop(croppedFace);
+    
+    // Use cropped descriptor if available, fallback to original
+    const queryDescriptor = croppedDescriptor || detection.descriptor;
+    console.log(`🔍 Login: Using ${croppedDescriptor ? 'cropped face' : 'original'} descriptor for matching`);
     
     /**
      * 🔥 TURBO: Fast squared distance (no sqrt needed for comparison)
@@ -871,37 +736,7 @@ export async function handleLoginRecognize(request) {
 
     console.log('✅ Recognition bestMatch:', bestMatch, 'bestDistance:', bestDistance);
 
-    if (bestMatch && bestDistance < 0.5) { // Threshold for match (tuned lower)
-      // 🚀 TURBO: Check if student already attended TODAY - skip expensive processing
-      const attendedToday = await getTodayAttendanceForRoom(roomId);
-      const alreadyAttended = attendedToday.get(bestMatch);
-      
-      if (alreadyAttended) {
-        // Student already marked present - return cached result immediately!
-        const cachedStudent = descriptorCache.get(bestMatch);
-        let studentName = bestMatch;
-        if (cachedStudent && cachedStudent.firstName) {
-          studentName = `${cachedStudent.firstName} ${cachedStudent.lastName}`.trim();
-        }
-        
-        console.log(`⚡ TURBO: ${studentName} already attended at ${alreadyAttended.loginTime} - returning cached result`);
-        console.log(`⏱️ Total request time (CACHED): ${Date.now() - requestStartTime}ms`);
-        
-        return new Response(JSON.stringify({ 
-          message: `✅ ${studentName} - Already present for ${alreadyAttended.subjectName}`,
-          studentId: bestMatch,
-          subjectName: alreadyAttended.subjectName,
-          imageUrl: `/attendance-login/api/face/${bestMatch}_pic1.png`,
-          attendanceRecorded: true,
-          cached: true,
-          loginTime: alreadyAttended.loginTime,
-          timing: Date.now() - requestStartTime
-        }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
+    if (bestMatch && bestDistance < 0.25) { // Threshold for match (tuned lower)
       // Get student name from database or cache
       let studentName = bestMatch; // fallback to ID if name lookup fails
       const cachedStudent = descriptorCache.get(bestMatch);
@@ -954,12 +789,6 @@ export async function handleLoginRecognize(request) {
         // Record attendance with the auto-detected subject and start time
         await recordAttendance(bestMatch, SubjectID, SectionID, TeacherID, StartTime);
         attendanceRecorded = true;
-        
-        // 🚀 TURBO: Update attendance cache so next recognition is instant
-        updateTodayAttendanceCache(roomId, bestMatch, 
-          `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}:${String(new Date().getSeconds()).padStart(2, '0')}`,
-          'Present', SubjectID, SectionID, subjectName);
-        
         console.log(`✅ Attendance recorded successfully for ${studentName}`);
         console.log(`⏱️ Total request time: ${Date.now() - requestStartTime}ms`);
       } catch (attendanceError) {
