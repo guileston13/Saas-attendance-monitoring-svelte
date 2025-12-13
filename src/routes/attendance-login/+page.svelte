@@ -54,6 +54,15 @@
   let detectionInterval;
   let loginImageUrl = "";
   
+  // 🚀 TURBO: Message auto-clear timer (3 seconds)
+  let messageClearTimer = null;
+  const MESSAGE_DISPLAY_DURATION = 3000; // 3 seconds
+  
+  // 🚀 TURBO: Recognition cooldown to prevent duplicate triggers
+  let recognitionCooldown = false;
+  let lastRecognizedStudent = null;
+  const RECOGNITION_COOLDOWN_MS = 4000; // 4 second cooldown after successful recognition
+  
   // 🔧 Camera state guard - prevent multiple simultaneous starts
   let isCameraActive = false;
   let isCameraStarting = false;
@@ -999,6 +1008,12 @@
       console.log("⏳ Detection already pending, skipping frame...");
       return;
     }
+    
+    // 🚀 TURBO GUARD: Skip during cooldown period after successful recognition
+    if (recognitionCooldown) {
+      console.log(`⏳ Recognition cooldown active (last: ${lastRecognizedStudent}), skipping...`);
+      return;
+    }
 
     // 🎯 GUARD 2: Throttle frames - minimum gap between detections (TURBO mode)
     const now = Date.now();
@@ -1074,6 +1089,24 @@
       loginMessageColor = data.message && data.message.includes("Welcome") ? "green" : "red";
       loginImageUrl = data.imageUrl || "";
       
+      // 🚀 TURBO: Clear any existing timer and set new auto-clear timer
+      if (messageClearTimer) clearTimeout(messageClearTimer);
+      messageClearTimer = setTimeout(() => {
+        loginMessage = "";
+        loginImageUrl = "";
+        messageClearTimer = null;
+      }, MESSAGE_DISPLAY_DURATION);
+      
+      // 🚀 TURBO: Set cooldown after successful recognition to prevent rapid re-triggers
+      if (data.message && data.message.includes("Welcome") && data.studentId) {
+        recognitionCooldown = true;
+        lastRecognizedStudent = data.studentId;
+        setTimeout(() => {
+          recognitionCooldown = false;
+          lastRecognizedStudent = null;
+        }, RECOGNITION_COOLDOWN_MS);
+      }
+      
       // Log timing if available
       if (data.timing) {
         console.log(`✅ Recognition response (${data.timing}ms server): ${data.message}`);
@@ -1116,6 +1149,11 @@
       clearInterval(detectionInterval);
       detectionInterval = null;
     }
+    // 🚀 TURBO: Clear message timer on camera stop
+    if (messageClearTimer) {
+      clearTimeout(messageClearTimer);
+      messageClearTimer = null;
+    }
     if (loginStream) {
       loginStream.getTracks().forEach((t) => t.stop());
       loginStream = null;
@@ -1125,6 +1163,10 @@
     // 🔧 Reset camera state
     isCameraActive = false;
     isCameraStarting = false;
+    
+    // 🚀 TURBO: Reset recognition cooldown
+    recognitionCooldown = false;
+    lastRecognizedStudent = null;
   }
 
   function saveDeviceName() {
