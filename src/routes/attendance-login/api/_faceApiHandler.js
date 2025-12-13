@@ -179,6 +179,12 @@ preloadDescriptorCache().catch(err => console.error('Descriptor preload failed:'
 const pendingRecognitions = new Map(); // Map<deviceSessionId, boolean>
 const RECOGNITION_TIMEOUT = 10000; // 10 second timeout to auto-clear stuck requests
 
+// ============================================================================
+// 🚀 FIX: Per-student cooldown to prevent duplicate attendance (but allow different students)
+// ============================================================================
+const studentCooldowns = new Map(); // Map<studentId, timestamp>
+const STUDENT_COOLDOWN_MS = 1500; // 1.5 seconds - same student can't trigger again this fast
+
 /**
  * Log attendance record to logs.txt (async, non-blocking)
  * @param {Object} record - Attendance record data
@@ -781,6 +787,28 @@ export async function handleLoginRecognize(request) {
     console.log('✅ Recognition bestMatch:', bestMatch, 'bestDistance:', bestDistance);
 
     if (bestMatch && bestDistance < 0.25) { // Threshold for match (tuned lower)
+      
+      // 🚀 FIX: Check per-student cooldown to prevent duplicate attendance
+      const now = Date.now();
+      const lastSeen = studentCooldowns.get(bestMatch);
+      if (lastSeen && (now - lastSeen) < STUDENT_COOLDOWN_MS) {
+        const timeLeft = Math.ceil((STUDENT_COOLDOWN_MS - (now - lastSeen)) / 1000);
+        console.log(`⏳ Student ${bestMatch} in cooldown (${timeLeft}s left), skipping duplicate`);
+        return new Response(JSON.stringify({ 
+          message: `⏳ Please wait ${timeLeft}s before scanning again`,
+          skipped: true,
+          cooldown: true
+        }), {
+          status: 200,
+          headers: NO_CACHE_HEADERS
+        });
+      }
+      
+      // Update cooldown for this student
+      studentCooldowns.set(bestMatch, now);
+      // Auto-cleanup old cooldowns after 5 minutes
+      setTimeout(() => studentCooldowns.delete(bestMatch), 5 * 60 * 1000);
+      
       // Get student name from database or cache
       let studentName = bestMatch; // fallback to ID if name lookup fails
       const cachedStudent = descriptorCache.get(bestMatch);

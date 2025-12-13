@@ -61,7 +61,7 @@
   // 🚀 TURBO: Recognition cooldown to prevent duplicate triggers
   let recognitionCooldown = false;
   let lastRecognizedStudent = null;
-  const RECOGNITION_COOLDOWN_MS = 4000; // 4 second cooldown after successful recognition
+  const RECOGNITION_COOLDOWN_MS = 1500; // 1.5 second cooldown after successful recognition
   
   // 🚀 FIX: Request tracking to prevent stale/cached responses
   let currentRequestId = 0; // Incremented for each request
@@ -1019,11 +1019,8 @@
       return;
     }
     
-    // 🚀 TURBO GUARD: Skip during cooldown period after successful recognition
-    if (recognitionCooldown) {
-      console.log(`⏳ Recognition cooldown active (last: ${lastRecognizedStudent}), skipping...`);
-      return;
-    }
+    // 🚀 FIX: Cooldown removed from here - will check per-student in response handler
+    // This allows different students to be recognized immediately
 
     // 🎯 GUARD 2: Throttle frames - minimum gap between detections (TURBO mode)
     const now = Date.now();
@@ -1100,9 +1097,14 @@
 
       const data = await res.json();
 
-      // 🚀 GUARD: Ignore skipped responses (server already processing previous request)
+      // 🚀 GUARD: Ignore skipped responses (server already processing previous request or cooldown)
       if (data.skipped) {
-        console.log("⏳ Server skipped - already processing previous request");
+        if (data.cooldown) {
+          console.log(`⏳ Student in cooldown: ${data.message}`);
+          // Don't show cooldown messages in UI, just silently skip
+        } else {
+          console.log("⏳ Server skipped - already processing previous request");
+        }
         isDetectionPending = false;
         return;
       }
@@ -1125,8 +1127,14 @@
         messageClearTimer = null;
       }, MESSAGE_DISPLAY_DURATION);
       
-      // 🚀 TURBO: Set cooldown after successful recognition to prevent rapid re-triggers
+      // 🚀 FIX: Cooldown only blocks SAME student re-recognition, not different students
       if (data.message && data.message.includes("Welcome") && data.studentId) {
+        // Clear any existing cooldown timer
+        if (recognitionCooldown) {
+          recognitionCooldown = false;
+        }
+        
+        // Set new cooldown with the current student
         recognitionCooldown = true;
         lastRecognizedStudent = data.studentId;
         setTimeout(() => {
