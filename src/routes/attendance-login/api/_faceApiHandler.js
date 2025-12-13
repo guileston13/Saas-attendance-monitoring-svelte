@@ -28,12 +28,6 @@ let descriptorCacheLoadedAt = 0;
 const DESCRIPTOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
 let isLoadingDescriptorCache = false;
 
-// ============================================================================
-// 🚦 DEVICE COOLDOWN: Prevent rapid repeated processing per device
-// ============================================================================
-const deviceCooldowns = new Map(); // Map<deviceSessionId, {studentId, expiresAt}>
-const COOLDOWN_DURATION = 5000; // 5 seconds cooldown after successful recognition
-
 /**
  * Preload all student descriptors into memory cache
  * Eliminates per-request file I/O which is the main bottleneck
@@ -685,25 +679,6 @@ export async function handleLoginRecognize(request) {
     // 🔧 DEBUG: Log incoming request info
     console.log(`📡 Recognition request from device: ${deviceSessionId || 'unknown'}, roomId: ${roomId}`);
     
-    // 🚦 CHECK DEVICE COOLDOWN - Skip processing if device is in cooldown
-    if (deviceSessionId && deviceCooldowns.has(deviceSessionId)) {
-      const cooldown = deviceCooldowns.get(deviceSessionId);
-      if (Date.now() < cooldown.expiresAt) {
-        console.log(`⏳ Device ${deviceSessionId} in cooldown for student ${cooldown.studentId}`);
-        return new Response(JSON.stringify({ 
-          message: `✅ Welcome back! (cooldown active)`,
-          studentId: cooldown.studentId,
-          cooldown: true
-        }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } else {
-        // Cooldown expired, remove it
-        deviceCooldowns.delete(deviceSessionId);
-      }
-    }
-    
     if (!image) {
       return new Response(JSON.stringify({ message: '❌ No image provided' }), {
         status: 400,
@@ -818,7 +793,7 @@ export async function handleLoginRecognize(request) {
 
     console.log('✅ Recognition bestMatch:', bestMatch, 'bestDistance:', bestDistance);
 
-    if (bestMatch && bestDistance < 0.25) { // Threshold for match (tuned lower)
+    if (bestMatch && bestDistance < 0.5) { // Threshold for match (tuned lower)
       // Get student name from database or cache
       let studentName = bestMatch; // fallback to ID if name lookup fails
       const cachedStudent = descriptorCache.get(bestMatch);
@@ -828,10 +803,11 @@ export async function handleLoginRecognize(request) {
       if (studentName === bestMatch) {
         // Fallback to database if not in cache
         try {
-          const studentRecord = await executeQuery('SELECT FirstName, LastName FROM students WHERE StudentID = ?', [bestMatch]);
-          if (studentRecord && studentRecord.length > 0) {
-            studentName = `${studentRecord[0].FirstName} ${studentRecord[0].LastName}`;
-          }
+          // const studentRecord = await executeQuery('SELECT FirstName, LastName FROM students WHERE StudentID = ?', [bestMatch]);
+          // if (studentRecord && studentRecord.length > 0) {
+          //   studentName = `${studentRecord[0].FirstName} ${studentRecord[0].LastName}`;
+          // }
+          studentName = 'Name';
         } catch (nameError) {
           console.error('Error fetching student name:', nameError);
         }
@@ -889,14 +865,6 @@ export async function handleLoginRecognize(request) {
         });
       }
 
-        // 🚦 SET COOLDOWN for this device after successful attendance
-        if (deviceSessionId) {
-          deviceCooldowns.set(deviceSessionId, {
-            studentId: bestMatch,
-            expiresAt: Date.now() + COOLDOWN_DURATION
-          });
-          console.log(`🚦 Cooldown set for device ${deviceSessionId} (${COOLDOWN_DURATION}ms)`);
-        }
         
         return new Response(JSON.stringify({ 
           message: `✅ Welcome, ${studentName}! Marked present for ${subjectName}`,
