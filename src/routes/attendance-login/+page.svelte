@@ -206,15 +206,16 @@
       try {
         const data = JSON.parse(event.data);
         
-        // 🔧 IMPROVED: Use both roomId AND deviceSessionId for filtering
+        // 🔧 FIX: Each Raspi only responds to its OWN room/device - NOT "all"
+        // This prevents one room's commands from affecting another room
         const myRoomDevice = `room${roomId}`;
         const mySessionDevice = deviceSessionId;
         
-        // Only react if message is for this device's room, session, or "all"
+        // Only react if message is SPECIFICALLY for this device's room or session
+        // REMOVED: "all" - each Raspi operates independently
         if (data.device) {
           const targetDevice = data.device;
-          const isForMe = targetDevice === 'all' || 
-                          targetDevice === myRoomDevice || 
+          const isForMe = targetDevice === myRoomDevice || 
                           targetDevice === mySessionDevice ||
                           targetDevice === `device${roomId}`; // Legacy support
           
@@ -222,6 +223,10 @@
             console.log(`📡 Ignoring SSE for ${targetDevice} (I am room:${roomId}, session:${deviceSessionId})`);
             return;
           }
+        } else {
+          // No device specified - ignore to prevent cross-room interference
+          console.log(`📡 Ignoring SSE with no device target (I am room:${roomId})`);
+          return;
         }
 
         if (data.status === "camera_started") {
