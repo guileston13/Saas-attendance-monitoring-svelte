@@ -162,6 +162,13 @@ async function getCachedScheduleForStudent(roomId, studentId) {
 console.log('🚀 Starting performance optimizations...');
 preloadDescriptorCache().catch(err => console.error('Descriptor preload failed:', err));
 
+// ============================================================================
+// 🚀 PERFORMANCE OPTIMIZATION: Per-device request deduplication
+// Prevents multiple simultaneous recognition requests from the same device
+// ============================================================================
+const pendingRecognitions = new Map(); // Map<deviceSessionId, boolean>
+const RECOGNITION_TIMEOUT = 10000; // 10 second timeout to auto-clear stuck requests
+
 /**
  * Log attendance record to logs.txt (async, non-blocking)
  * @param {Object} record - Attendance record data
@@ -623,19 +630,46 @@ export async function handleLoginRecognize(request) {
     // 🔧 DEBUG: Log incoming request info
     console.log(`📡 Recognition request from device: ${deviceSessionId || 'unknown'}, roomId: ${roomId}`);
     
-    if (!image) {
-      return new Response(JSON.stringify({ message: '❌ No image provided' }), {
-        status: 400,
+    // 🚀 GUARD: Check if this device already has a pending recognition request
+    const deviceKey = deviceSessionId || `room_${roomId}`;
+    if (pendingRecognitions.get(deviceKey)) {
+      console.log(`⏳ Recognition already pending for device ${deviceKey}, skipping...`);
+      return new Response(JSON.stringify({ 
+        message: '⏳ Processing previous request...',
+        skipped: true 
+      }), {
+        status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
     }
     
-    if (!roomId) {
-      return new Response(JSON.stringify({ message: '❌ Room not configured' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    // Mark this device as having a pending request
+    pendingRecognitions.set(deviceKey, true);
+    
+    // Safety timeout to auto-clear stuck requests
+    const timeoutId = setTimeout(() => {
+      if (pendingRecognitions.get(deviceKey)) {
+        console.log(`⚠️ Recognition timeout for device ${deviceKey}, clearing...`);
+        pendingRecognitions.delete(deviceKey);
+      }
+    }, RECOGNITION_TIMEOUT);
+    
+    // Wrap the rest in try-finally to ensure we clear the pending flag
+    try {
+    
+      if (!image) {
+        return new Response(JSON.stringify({ message: '❌ No image provided' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      if (!roomId) {
+        return new Response(JSON.stringify({ message: '❌ Room not configured' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
 
     const imgDecodeStart = Date.now();
     const img = await imageFromBase64(image);
@@ -824,6 +858,14 @@ export async function handleLoginRecognize(request) {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+    
+    } finally {
+      // 🚀 GUARD: Always clear the pending flag when done
+      clearTimeout(timeoutId);
+      pendingRecognitions.delete(deviceKey);
+      console.log(`✅ Cleared pending flag for device ${deviceKey}`);
+    }
+    
   } catch (err) {
     console.error('Recognition error:', err);
     return new Response(JSON.stringify({ message: '❌ Recognition failed' }), {

@@ -1079,6 +1079,13 @@
 
       const data = await res.json();
 
+      // 🚀 GUARD: Ignore skipped responses (server already processing previous request)
+      if (data.skipped) {
+        console.log("⏳ Server skipped - already processing previous request");
+        isDetectionPending = false;
+        return;
+      }
+
       // Successfully received response
       lastSuccessTime = Date.now();
       consecutiveFailures = 0;
