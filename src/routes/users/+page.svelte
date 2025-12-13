@@ -8,11 +8,13 @@
 	
 	$: users = data.users || [];
 	$: statuses = data.statuses || [];
+	$: unassignedTeachers = data.unassignedTeachers || [];
 	
 	let showCreateModal = false;
 	let editingUser = null;
 	let loading = false;
 	let searchTerm = '';
+	let selectedRole = '';
 	
 	// Premium loading and animation states
 	let isLoading = true;
@@ -83,10 +85,12 @@
 	});
 	
 	function openCreateModal() {
+		selectedRole = '';
 		showCreateModal = true;
 	}
 	
 	function closeCreateModal() {
+		selectedRole = '';
 		showCreateModal = false;
 	}
 	
@@ -521,7 +525,7 @@
 						User Role
 					</label>
 					<div class="select-wrapper">
-						<select id="role" name="role" required class="form-select">
+						<select id="role" name="role" required class="form-select" bind:value={selectedRole}>
 							<option value="">Select Role</option>
 							<option value="Admin">Administrator</option>
 							<option value="Teacher">Teacher</option>
@@ -532,6 +536,31 @@
 						</svg>
 					</div>
 				</div>
+				
+				{#if selectedRole === 'Teacher' && unassignedTeachers.length > 0}
+				<div class="form-group">
+					<label for="teacherId" class="form-label">
+						<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+						</svg>
+						Link to Existing Teacher <span class="optional-label">(Optional)</span>
+					</label>
+					<div class="select-wrapper">
+						<select id="teacherId" name="teacherId" class="form-select">
+							<option value="">-- Create new teacher profile --</option>
+							{#each unassignedTeachers as teacher}
+								<option value={teacher.TeacherID}>
+									{teacher.FirstName} {teacher.MiddleName ? teacher.MiddleName + ' ' : ''}{teacher.LastName}
+								</option>
+							{/each}
+						</select>
+						<svg class="select-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+						</svg>
+					</div>
+					<p class="form-hint">Select an existing teacher from the Teacher module to link to this account.</p>
+				</div>
+				{/if}
 				
 				<div class="form-group">
 					<label for="status" class="form-label">
@@ -629,6 +658,31 @@
 						</svg>
 					</div>
 				</div>
+				
+				{#if editingUser.Role === 'Teacher' && unassignedTeachers.length > 0}
+				<div class="form-group">
+					<label for="edit-teacherId" class="form-label">
+						<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+						</svg>
+						Link to Existing Teacher <span class="optional-label">(Optional)</span>
+					</label>
+					<div class="select-wrapper">
+						<select id="edit-teacherId" name="teacherId" class="form-select">
+							<option value="">-- No change --</option>
+							{#each unassignedTeachers as teacher}
+								<option value={teacher.TeacherID}>
+									{teacher.FirstName} {teacher.MiddleName ? teacher.MiddleName + ' ' : ''}{teacher.LastName}
+								</option>
+							{/each}
+						</select>
+						<svg class="select-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+						</svg>
+					</div>
+					<p class="form-hint">Select an existing teacher from the Teacher module to link to this account.</p>
+				</div>
+				{/if}
 				
 				<div class="form-group">
 					<label for="edit-status" class="form-label">
@@ -1834,6 +1888,18 @@
 		font-weight: 600;
 		color: #334155;
 		font-size: 0.95rem;
+	}
+	
+	.optional-label {
+		font-weight: 400;
+		color: #94a3b8;
+		font-size: 0.85rem;
+	}
+	
+	.form-hint {
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+		color: #64748b;
 	}
 
 	.label-icon {

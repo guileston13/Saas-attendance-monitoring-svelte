@@ -108,18 +108,22 @@
 		if (!selectedSectionId) return;
 		
 		try {
+			console.log('Loading subjects for section:', selectedSectionId);
 			const response = await fetch(`/api/attendance/sections/${selectedSectionId}`, {
 				credentials: 'include'
 			});
 			
 			if (response.ok) {
 				const result = await response.json();
+				console.log('Subjects API response:', result);
 				availableSubjects = result.subjects || [];
+				console.log('Available subjects:', availableSubjects);
 			} else {
-				console.error('Failed to load subjects');
+				console.error('Failed to load subjects, status:', response.status);
 				availableSubjects = [];
 			}
 		} catch (err) {
+			console.error('Error loading subjects:', err);
 			availableSubjects = [];
 		}
 	}

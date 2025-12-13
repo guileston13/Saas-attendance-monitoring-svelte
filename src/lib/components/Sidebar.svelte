@@ -76,7 +76,8 @@
 				...commonItems,
 				{ href: '/sections', icon: '🏫', text: 'My Sections' },
 				{ href: '/attendance', icon: '📋', text: 'Attendance' },
-				{ href: '/students', icon: '👥', text: 'Students' }
+				{ href: '/students', icon: '👥', text: 'Students' },
+				{ href: '/reports', icon: '📈', text: 'Reports' }
 			];
 		} else if (role === 'Student') {
 			return [

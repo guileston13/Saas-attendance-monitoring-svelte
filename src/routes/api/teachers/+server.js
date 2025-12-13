@@ -6,7 +6,8 @@ import {
     getTeacherById, 
     createTeacher, 
     updateTeacher, 
-    deleteTeacher 
+    deleteTeacher,
+    createTeacherWithUser
 } from '../../../services/teacherService.js';
 
 /** @type {import('./$types').RequestHandler} */
@@ -36,24 +37,26 @@ export async function POST({ request }) {
     
     try {
         const data = await request.json();
-        const { firstName, lastName, middleName, role, statusId } = data;
+        const { firstName, lastName, middleName, role, statusId, email } = data;
         
         if (!firstName || !lastName || !statusId) {
             return json({ error: 'Missing required fields' }, { status: 400 });
         }
         
-        const result = await createTeacher({
+        // Create teacher with optional user account if email is provided
+        const result = await createTeacherWithUser({
             firstName,
             lastName,
             middleName: middleName || null,
             role: role || 'Teacher',
-            statusId
+            statusId,
+            email: email || null
         });
         
-        return json({ success: true, id: result.insertId });
+        return json({ success: true, id: result.teacherId });
     } catch (error) {
         console.error('Create teacher error:', error);
-        return json({ error: 'Failed to create teacher' }, { status: 500 });
+        return json({ error: error.message || 'Failed to create teacher' }, { status: 500 });
     }
 }
 

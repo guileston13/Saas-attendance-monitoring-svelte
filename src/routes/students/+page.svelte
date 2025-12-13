@@ -197,7 +197,7 @@
 </script>
 
 <svelte:head>
-	\t<title>Students - School Management System</title>
+	<title>Students - School Management System</title>
 </svelte:head>
 
 <!-- Premium Loading Screen -->
