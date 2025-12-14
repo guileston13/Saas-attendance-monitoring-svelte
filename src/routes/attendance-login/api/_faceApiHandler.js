@@ -28,6 +28,148 @@ let descriptorCacheLoadedAt = 0;
 const DESCRIPTOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
 let isLoadingDescriptorCache = false;
 
+// ============================================================================
+// 🔒 COOLDOWN & RATE LIMITING SYSTEM
+// ============================================================================
+// Tracks which devices are currently processing a request
+const deviceProcessingLock = new Map(); // Map<deviceSessionId, {startTime, roomId}>
+
+// Tracks recently recognized students per room to prevent duplicate detections
+// Key: `${roomId}_${studentId}`, Value: {recognizedAt, studentName, status}
+const studentRecognitionCooldown = new Map();
+
+// Cooldown configuration
+const STUDENT_COOLDOWN_MS = 5 * 1000; // 5 seconds before same student can be recognized again
+const DEVICE_LOCK_TIMEOUT_MS = 15 * 1000; // 15 seconds max lock time (auto-release if stuck)
+const REQUEST_THROTTLE_MS = 500; // Minimum time between requests from same device
+
+// Track last request time per device for throttling
+const deviceLastRequestTime = new Map();
+
+/**
+ * Check if a device is currently processing and should skip this request
+ * @param {string} deviceSessionId - Unique device identifier
+ * @returns {{skip: boolean, reason?: string}}
+ */
+function checkDeviceLock(deviceSessionId) {
+  const lock = deviceProcessingLock.get(deviceSessionId);
+  if (!lock) return { skip: false };
+  
+  const elapsed = Date.now() - lock.startTime;
+  
+  // Auto-release stuck locks
+  if (elapsed > DEVICE_LOCK_TIMEOUT_MS) {
+    console.log(`🔓 Auto-releasing stuck lock for device ${deviceSessionId} (${elapsed}ms)`);
+    deviceProcessingLock.delete(deviceSessionId);
+    return { skip: false };
+  }
+  
+  return { 
+    skip: true, 
+    reason: `Device is processing another request (${elapsed}ms elapsed)` 
+  };
+}
+
+/**
+ * Acquire processing lock for a device
+ * @param {string} deviceSessionId 
+ * @param {number|string} roomId 
+ */
+function acquireDeviceLock(deviceSessionId, roomId) {
+  deviceProcessingLock.set(deviceSessionId, {
+    startTime: Date.now(),
+    roomId
+  });
+}
+
+/**
+ * Release processing lock for a device
+ * @param {string} deviceSessionId 
+ */
+function releaseDeviceLock(deviceSessionId) {
+  deviceProcessingLock.delete(deviceSessionId);
+}
+
+/**
+ * Check if request should be throttled (too fast)
+ * @param {string} deviceSessionId 
+ * @returns {{throttle: boolean, waitMs?: number}}
+ */
+function checkRequestThrottle(deviceSessionId) {
+  const lastTime = deviceLastRequestTime.get(deviceSessionId);
+  const now = Date.now();
+  
+  if (lastTime) {
+    const elapsed = now - lastTime;
+    if (elapsed < REQUEST_THROTTLE_MS) {
+      return { throttle: true, waitMs: REQUEST_THROTTLE_MS - elapsed };
+    }
+  }
+  
+  deviceLastRequestTime.set(deviceSessionId, now);
+  return { throttle: false };
+}
+
+/**
+ * Check if a student is on cooldown (recently recognized in this room)
+ * @param {number|string} roomId 
+ * @param {string} studentId 
+ * @returns {{onCooldown: boolean, remainingMs?: number, lastRecognition?: object}}
+ */
+function checkStudentCooldown(roomId, studentId) {
+  const key = `${roomId}_${studentId}`;
+  const record = studentRecognitionCooldown.get(key);
+  
+  if (!record) return { onCooldown: false };
+  
+  const elapsed = Date.now() - record.recognizedAt;
+  
+  if (elapsed >= STUDENT_COOLDOWN_MS) {
+    // Cooldown expired, remove record
+    studentRecognitionCooldown.delete(key);
+    return { onCooldown: false };
+  }
+  
+  return {
+    onCooldown: true,
+    remainingMs: STUDENT_COOLDOWN_MS - elapsed,
+    lastRecognition: record
+  };
+}
+
+/**
+ * Record a student recognition (starts their cooldown)
+ * @param {number|string} roomId 
+ * @param {string} studentId 
+ * @param {string} studentName 
+ * @param {string} status - 'success', 'no_schedule', 'error'
+ */
+function recordStudentRecognition(roomId, studentId, studentName, status) {
+  const key = `${roomId}_${studentId}`;
+  studentRecognitionCooldown.set(key, {
+    recognizedAt: Date.now(),
+    studentName,
+    status,
+    studentId
+  });
+  console.log(`🕐 Cooldown started for ${studentName} (${studentId}) in room ${roomId} - ${STUDENT_COOLDOWN_MS/1000}s`);
+}
+
+/**
+ * Clean up expired cooldown records (call periodically)
+ */
+function cleanupExpiredCooldowns() {
+  const now = Date.now();
+  for (const [key, record] of studentRecognitionCooldown) {
+    if (now - record.recognizedAt >= STUDENT_COOLDOWN_MS) {
+      studentRecognitionCooldown.delete(key);
+    }
+  }
+}
+
+// Clean up every 60 seconds
+setInterval(cleanupExpiredCooldowns, 60 * 1000);
+
 /**
  * Preload all student descriptors into memory cache
  * Eliminates per-request file I/O which is the main bottleneck
@@ -614,57 +756,123 @@ export async function handleRegister(request) {
 }
 
 export async function handleLoginRecognize(request) {
+  console.log(`\n🚀 ===========handleLoginRecognize START ===============`);
+  console.log(`📦 ensureModelsLoaded() START`);
   const requestStartTime = Date.now();
   await ensureModelsLoaded();
+  console.log(`📦 ensureModelsLoaded() DONE`);
+  
+  // Parse request data first to get device info for locking
+  let image, roomId, deviceSessionId;
+  try {
+    console.log(`📥 Parsing request.json()`);
+    const body = await request.json();
+    image = body.image;
+    roomId = body.roomId;
+    deviceSessionId = body.deviceSessionId || 'unknown_device';
+    console.log(`📥 Parsed request: { hasImage: ${!!image}, roomId: ${roomId}, deviceSessionId: '${deviceSessionId}' }`);
+    console.log(`📡 Request from device=${deviceSessionId} roomId=${roomId}`);
+  } catch (parseError) {
+    console.error('❌ Failed to parse request body:', parseError);
+    return new Response(JSON.stringify({ message: '❌ Invalid request body' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // ============================================================================
+  // 🔒 COOLDOWN CHECK 1: Request throttling (too fast)
+  // ============================================================================
+  const throttleCheck = checkRequestThrottle(deviceSessionId);
+  if (throttleCheck.throttle) {
+    console.log(`⏳ Throttled: Device ${deviceSessionId} sending too fast (wait ${throttleCheck.waitMs}ms)`);
+    return new Response(JSON.stringify({ 
+      message: '⏳ Please wait...',
+      throttled: true,
+      waitMs: throttleCheck.waitMs
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // ============================================================================
+  // 🔒 COOLDOWN CHECK 2: Device processing lock (already processing)
+  // ============================================================================
+  const lockCheck = checkDeviceLock(deviceSessionId);
+  if (lockCheck.skip) {
+    console.log(`⏳ Skipping detection (cooldown) - ${lockCheck.reason}`);
+    return new Response(JSON.stringify({ 
+      message: '⏳ Processing previous request...',
+      processing: true
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Acquire lock for this device
+  acquireDeviceLock(deviceSessionId, roomId);
   
   try {
-    const { image, roomId, deviceSessionId } = await request.json();
-    
-    // 🔧 DEBUG: Log incoming request info
-    console.log(`📡 Recognition request from device: ${deviceSessionId || 'unknown'}, roomId: ${roomId}`);
-    
+    // Validate inputs
     if (!image) {
+      console.log(`❌ IF FAILED: No image provided`);
+      releaseDeviceLock(deviceSessionId);
       return new Response(JSON.stringify({ message: '❌ No image provided' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+    console.log(`✅ IF PASSED: image exists`);
     
     if (!roomId) {
+      console.log(`❌ IF FAILED: No roomId`);
+      releaseDeviceLock(deviceSessionId);
       return new Response(JSON.stringify({ message: '❌ Room not configured' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+    console.log(`✅ IF PASSED: roomId exists`);
 
+    console.log(`🖼️ imageFromBase64() START`);
     const imgDecodeStart = Date.now();
     const img = await imageFromBase64(image);
-    console.log(`⏱️ Image decode: ${Date.now() - imgDecodeStart}ms`);
+    console.log(`🖼️ imageFromBase64() DONE in ${Date.now() - imgDecodeStart}ms`);
     
     // 🚀 TURBO: Use TinyFaceDetector for FAST login detection (5-10x faster than MTCNN)
+    console.log(`👤 Face detection START`);
     const detectionStart = Date.now();
     const detection = await faceapi
       .detectSingleFace(img, tinyFaceOptions)
       .withFaceLandmarks()
       .withFaceDescriptor();
-    console.log(`⏱️ TURBO Face detection: ${Date.now() - detectionStart}ms`);
+    console.log(`👤 Face detection DONE in ${Date.now() - detectionStart}ms`);
     
     if (!detection) {
+      console.log(`❌ IF FAILED: No face detected`);
+      releaseDeviceLock(deviceSessionId);
       return new Response(JSON.stringify({ message: '❌ No face detected' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
     }
     
-    console.log(`🔍 Login: Face detected with confidence ${detection.detection.score.toFixed(3)}`);
+    console.log(`✅ IF PASSED: Face detected ${detection.detection.score}`);
     
     // 🎯 CROP THE FACE for better matching accuracy (same as registration)
+    console.log(`✂️ cropAlignedFace() START`);
     const croppedFace = cropAlignedFace(img, detection);
+    console.log(`✂️ cropAlignedFace() DONE`);
+    
+    console.log(`🧬 extractDescriptorFromCrop() START`);
     const croppedDescriptor = await extractDescriptorFromCrop(croppedFace);
+    console.log(`🧬 extractDescriptorFromCrop() DONE`, !!croppedDescriptor);
     
     // Use cropped descriptor if available, fallback to original
     const queryDescriptor = croppedDescriptor || detection.descriptor;
-    console.log(`🔍 Login: Using ${croppedDescriptor ? 'cropped face' : 'original'} descriptor for matching`);
+    console.log(`🧠 Using ${croppedDescriptor ? 'CROPPED' : 'ORIGINAL'} descriptor`);
     
     /**
      * 🔥 TURBO: Fast squared distance (no sqrt needed for comparison)
@@ -732,19 +940,42 @@ export async function handleLoginRecognize(request) {
       }
     }
     
-    console.log(`⚡ TURBO matching (${cachedDescriptors.size} students): ${Date.now() - matchingStart}ms`);
+    console.log(`⚡ Matching DONE in ${Date.now() - matchingStart}ms`);
 
-    console.log('✅ Recognition bestMatch:', bestMatch, 'bestDistance:', bestDistance);
+    console.log(`🏁 Best match: ${bestMatch} Distance: ${bestDistance}`);
 
     if (bestMatch && bestDistance < 0.2) { // Threshold for match (tuned lower)
+      console.log(`✅ IF PASSED: Student recognized`);
+      
+      // ============================================================================
+      // 🔒 COOLDOWN CHECK 3: Student recently recognized (prevent duplicate attendance)
+      // ============================================================================
+      const studentCooldownCheck = checkStudentCooldown(roomId, bestMatch);
+      if (studentCooldownCheck.onCooldown) {
+        const remainingSec = Math.ceil(studentCooldownCheck.remainingMs / 1000);
+        console.log(`⏳ Student ${bestMatch} on cooldown (${remainingSec}s remaining)`);
+        releaseDeviceLock(deviceSessionId);
+        return new Response(JSON.stringify({ 
+          message: `⏳ ${studentCooldownCheck.lastRecognition.studentName} already recognized. Wait ${remainingSec}s`,
+          studentId: bestMatch,
+          onCooldown: true,
+          remainingSeconds: remainingSec
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
       // Get student name from database or cache
       let studentName = bestMatch; // fallback to ID if name lookup fails
       const cachedStudent = descriptorCache.get(bestMatch);
       if (cachedStudent && cachedStudent.firstName) {
         studentName = `${cachedStudent.firstName} ${cachedStudent.lastName}`.trim();
+        console.log(`📛 Student name from cache`);
       }
       if (studentName === bestMatch) {
         // Fallback to database if not in cache
+        console.log(`📛 Student name lookup from DB`);
         try {
           const studentRecord = await executeQuery('SELECT FirstName, LastName FROM students WHERE StudentID = ?', [bestMatch]);
           if (studentRecord && studentRecord.length > 0) {
@@ -754,6 +985,7 @@ export async function handleLoginRecognize(request) {
           console.error('Error fetching student name:', nameError);
         }
       }
+      console.log(`👤 Final studentName: ${studentName}`);
 
       let subjectName = 'Unknown Subject'; // Default value
       let attendanceRecorded = false;
@@ -761,19 +993,20 @@ export async function handleLoginRecognize(request) {
       // Record attendance automatically when student is recognized
       try {
         // 🚀 OPTIMIZATION: Use cached schedule instead of complex query
+        console.log(`📅 getCachedScheduleForStudent() START`);
         const scheduleStart = Date.now();
         const scheduleResults = await getCachedScheduleForStudent(roomId, bestMatch);
-        console.log(`⏱️ Schedule lookup: ${Date.now() - scheduleStart}ms`);
-        
-        console.log("hello bestMatch: =>", bestMatch);
-        console.log("hello roomId: =>", roomId);
-        console.log('📅 Schedule query result:', scheduleResults);
+        console.log(`📅 Schedule results: ${JSON.stringify(scheduleResults.map(s => ({ SubjectID: s.SubjectID, subject_name: s.subject_name })))}`);
         
         if (scheduleResults.length === 0) {
-          console.log(`⏱️ Total request time: ${Date.now() - requestStartTime}ms`);
+          console.log(`⚠️ IF FAILED: No schedule`);
+          // Record recognition even without schedule (for cooldown)
+          recordStudentRecognition(roomId, bestMatch, studentName, 'no_schedule');
+          releaseDeviceLock(deviceSessionId);
           return new Response(JSON.stringify({ 
             message: `⚠️ No class scheduled for ${studentName} in this room at current time`,
             studentId: bestMatch,
+            studentName: studentName,
             timing: Date.now() - requestStartTime
           }), {
             status: 200,
@@ -790,9 +1023,16 @@ export async function handleLoginRecognize(request) {
         await recordAttendance(bestMatch, SubjectID, SectionID, TeacherID, StartTime);
         attendanceRecorded = true;
         console.log(`✅ Attendance recorded successfully for ${studentName}`);
+        
+        // 🔒 Record recognition for cooldown AFTER successful attendance
+        recordStudentRecognition(roomId, bestMatch, studentName, 'success');
+        
         console.log(`⏱️ Total request time: ${Date.now() - requestStartTime}ms`);
       } catch (attendanceError) {
         console.error('Attendance recording error:', attendanceError);
+        // Record recognition even on error (for cooldown)
+        recordStudentRecognition(roomId, bestMatch, studentName, 'error');
+        releaseDeviceLock(deviceSessionId);
         // Continue with recognition but note that attendance wasn't recorded
         return new Response(JSON.stringify({ 
           message: `⚠️ ${studentName} recognized but attendance recording failed: ${attendanceError.message}`,
@@ -807,18 +1047,22 @@ export async function handleLoginRecognize(request) {
         });
       }
 
-        
+        releaseDeviceLock(deviceSessionId);
         return new Response(JSON.stringify({ 
           message: `✅ Welcome, ${studentName}! Marked present for ${subjectName}`,
           studentId: bestMatch,
+          studentName: studentName,
           subjectName: subjectName,
           imageUrl: `/attendance-login/api/face/${bestMatch}_pic1.png`,
-          attendanceRecorded: attendanceRecorded
+          attendanceRecorded: attendanceRecorded,
+          cooldownSeconds: STUDENT_COOLDOWN_MS / 1000
         }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
     } else {
+      console.log(`❌ IF FAILED: No match or distance too high (${bestDistance})`);
+      releaseDeviceLock(deviceSessionId);
       return new Response(JSON.stringify({ message: '🚫 Stranger detected' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
@@ -826,6 +1070,10 @@ export async function handleLoginRecognize(request) {
     }
   } catch (err) {
     console.error('Recognition error:', err);
+    // Make sure to release lock on error
+    if (deviceSessionId) {
+      releaseDeviceLock(deviceSessionId);
+    }
     return new Response(JSON.stringify({ message: '❌ Recognition failed' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }

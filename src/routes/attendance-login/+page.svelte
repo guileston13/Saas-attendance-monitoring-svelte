@@ -1067,11 +1067,52 @@
       // Successfully received response
       lastSuccessTime = Date.now();
       consecutiveFailures = 0;
-      currentDetectionInterval = BASE_DETECTION_INTERVAL; // Reset to base interval
+      
+      // 🔒 Handle cooldown/throttle responses - slow down detection
+      if (data.throttled || data.processing || data.onCooldown) {
+        // Server is telling us to slow down
+        console.log(`⏳ Server cooldown: ${data.message}`);
+        
+        if (data.onCooldown && data.remainingSeconds) {
+          // Student on cooldown - show orange message and pause detection longer
+          loginMessage = data.message;
+          loginMessageColor = "orange";
+          currentDetectionInterval = Math.max(data.remainingSeconds * 1000, SLOW_DETECTION_INTERVAL);
+        } else {
+          // Throttled or processing - just slow down briefly
+          currentDetectionInterval = SLOW_DETECTION_INTERVAL;
+          loginMessage = data.message || "⏳ Please wait...";
+          loginMessageColor = "orange";
+        }
+        
+        // Restart interval with slower timing
+        if (detectionInterval) clearInterval(detectionInterval);
+        detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
+        return;
+      }
+      
+      // Reset to base interval for normal responses
+      currentDetectionInterval = BASE_DETECTION_INTERVAL;
 
       // Directly set the recognition result
       loginMessage = data.message;
-      loginMessageColor = data.message && data.message.includes("Welcome") ? "green" : "red";
+      
+      // Color coding: green for welcome, orange for warnings, red for errors
+      if (data.message && data.message.includes("Welcome")) {
+        loginMessageColor = "green";
+        // 🎉 Successful recognition - pause detection for cooldown period
+        if (data.cooldownSeconds) {
+          console.log(`🎉 Recognition success! Pausing for ${data.cooldownSeconds}s cooldown`);
+          currentDetectionInterval = data.cooldownSeconds * 1000;
+          if (detectionInterval) clearInterval(detectionInterval);
+          detectionInterval = setInterval(sendFrameForDetection, currentDetectionInterval);
+        }
+      } else if (data.message && (data.message.includes("⚠️") || data.message.includes("No class"))) {
+        loginMessageColor = "orange";
+      } else {
+        loginMessageColor = "red";
+      }
+      
       loginImageUrl = data.imageUrl || "";
       
       // Log timing if available
