@@ -736,7 +736,7 @@ export async function handleLoginRecognize(request) {
 
     console.log('✅ Recognition bestMatch:', bestMatch, 'bestDistance:', bestDistance);
 
-    if (bestMatch && bestDistance < 0.5) { // Threshold for match (tuned lower)
+    if (bestMatch && bestDistance < 0.2) { // Threshold for match (tuned lower)
       // Get student name from database or cache
       let studentName = bestMatch; // fallback to ID if name lookup fails
       const cachedStudent = descriptorCache.get(bestMatch);
