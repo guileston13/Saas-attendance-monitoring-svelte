@@ -227,6 +227,7 @@ export const actions = {
 			const wednesday = data.get('wednesday') === 'on' ? 1 : 0;
 			const thursday = data.get('thursday') === 'on' ? 1 : 0;
 			const friday = data.get('friday') === 'on' ? 1 : 0;
+			const saturday = data.get('saturday') === 'on' ? 1 : 0;
 
 			// Parse per-day schedule with teachers and rooms
 			const schedule = {
@@ -259,6 +260,12 @@ export const actions = {
 					end: data.get('fridayEnd') || null,
 					teacher: data.get('fridayTeacher') || null,
 					room: data.get('fridayRoom') || null
+				},
+				saturday: { 
+					start: data.get('saturdayStart') || null, 
+					end: data.get('saturdayEnd') || null,
+					teacher: data.get('saturdayTeacher') || null,
+					room: data.get('saturdayRoom') || null
 				}
 			};
 
@@ -266,7 +273,7 @@ export const actions = {
 				return { type: 'error', error: 'Section ID and Subject ID are required' };
 			}
 
-			await addSubjectToSection(sectionId, subjectId, teacherId, roomId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, schedule);
+			await addSubjectToSection(sectionId, subjectId, teacherId, roomId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, saturday, schedule);
 			return { type: 'success' };
 		} catch (error) {
 			console.error('Add subject error:', error);
@@ -304,6 +311,7 @@ export const actions = {
 			const wednesday = data.get('wednesday') === 'on' ? 1 : 0;
 			const thursday = data.get('thursday') === 'on' ? 1 : 0;
 			const friday = data.get('friday') === 'on' ? 1 : 0;
+			const saturday = data.get('saturday') === 'on' ? 1 : 0;
 
 			// Parse per-day schedule with teachers and rooms
 			const schedule = {
@@ -336,6 +344,12 @@ export const actions = {
 					end: data.get('fridayEnd') || null,
 					teacher: data.get('fridayTeacher') || null,
 					room: data.get('fridayRoom') || null
+				},
+				saturday: { 
+					start: data.get('saturdayStart') || null, 
+					end: data.get('saturdayEnd') || null,
+					teacher: data.get('saturdayTeacher') || null,
+					room: data.get('saturdayRoom') || null
 				}
 			};
 
@@ -344,7 +358,7 @@ export const actions = {
 			}
 
 			const { updateSectionSubject } = await import('../../services/sectionService.js');
-			await updateSectionSubject(sectionId, subjectId, teacherId, roomId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, schedule);
+			await updateSectionSubject(sectionId, subjectId, teacherId, roomId, startTime, endTime, monday, tuesday, wednesday, thursday, friday, saturday, schedule);
 			return { type: 'success' };
 		} catch (error) {
 			console.error('Update section subject error:', error);

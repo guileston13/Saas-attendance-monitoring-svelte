@@ -935,6 +935,14 @@
 							/>
 							<span>Friday</span>
 						</label>
+						<label class="day-checkbox">
+							<input
+								type="checkbox"
+								name="saturday"
+								checked={editingSubject?.Saturday || false}
+							/>
+							<span>Saturday</span>
+						</label>
 					</div>
 				</div>
 
@@ -1159,6 +1167,51 @@
 								id="fridayTeacher"
 								name="fridayTeacher"
 								value={editingSubject?.FridayTeacher || ""}
+							>
+								<option value="">None</option>
+								{#each teachers as teacher}
+									<option value={teacher.TeacherID}>
+										{teacher.FirstName}
+										{teacher.LastName}
+									</option>
+								{/each}
+							</select>
+						</div>
+					</div>
+				</div>
+
+				<!-- Saturday Schedule -->
+				<div class="day-schedule-row">
+					<div class="day-label">
+						<span class="day-icon">📅</span>
+						<strong>Saturday</strong>
+					</div>
+					<div class="time-inputs">
+						<div class="time-input-group">
+							<label for="saturdayStart">Start:</label>
+							<input
+								type="time"
+								id="saturdayStart"
+								name="saturdayStart"
+								value={editingSubject?.SaturdayStart || ""}
+							/>
+						</div>
+						<span class="time-separator">→</span>
+						<div class="time-input-group">
+							<label for="saturdayEnd">End:</label>
+							<input
+								type="time"
+								id="saturdayEnd"
+								name="saturdayEnd"
+								value={editingSubject?.SaturdayEnd || ""}
+							/>
+						</div>
+						<div class="teacher-input-group">
+							<label for="saturdayTeacher">Teacher:</label>
+							<select
+								id="saturdayTeacher"
+								name="saturdayTeacher"
+								value={editingSubject?.SaturdayTeacher || ""}
 							>
 								<option value="">None</option>
 								{#each teachers as teacher}
@@ -3223,6 +3276,179 @@
 		}
 	}
 
+	/* ===== PER-DAY SCHEDULE STYLES ===== */
+	.form-hint {
+		margin: 8px 0 16px 0;
+		font-size: 14px;
+		color: #6b7280;
+		font-style: italic;
+	}
+
+	.day-schedule-row {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		padding: 12px;
+		margin-bottom: 12px;
+		background: rgba(249, 250, 251, 0.5);
+		border-radius: 8px;
+		border: 1px solid #e5e7eb;
+	}
+
+	.day-label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 100px;
+		font-weight: 500;
+		color: #374151;
+		flex-shrink: 0;
+	}
+
+	.day-icon {
+		font-size: 18px;
+	}
+
+	.time-inputs {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		flex: 1;
+		flex-wrap: wrap;
+	}
+
+	.time-input-group {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.time-input-group label {
+		font-size: 14px;
+		color: #6b7280;
+		min-width: 40px;
+	}
+
+	.time-input-group input[type="time"] {
+		padding: 6px 10px;
+		border: 1px solid #d1d5db;
+		border-radius: 6px;
+		font-size: 14px;
+		background: white;
+		transition: all 0.2s;
+		width: auto;
+		min-width: 100px;
+	}
+
+	.time-input-group input[type="time"]:focus {
+		outline: none;
+		border-color: #6366f1;
+		box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+	}
+
+	.teacher-input-group {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.teacher-input-group label {
+		font-size: 14px;
+		color: #6b7280;
+		min-width: 55px;
+	}
+
+	.teacher-input-group select {
+		padding: 6px 10px;
+		border: 1px solid #d1d5db;
+		border-radius: 6px;
+		font-size: 14px;
+		background: white;
+		transition: all 0.2s;
+		min-width: 140px;
+		width: auto;
+	}
+
+	.teacher-input-group select:focus {
+		outline: none;
+		border-color: #6366f1;
+		box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+	}
+
+	.time-separator {
+		color: #9ca3af;
+		font-size: 18px;
+		font-weight: 500;
+	}
+
+	/* ===== RESPONSIVE PER-DAY SCHEDULE ===== */
+	@media (max-width: 1200px) {
+		.day-schedule-row {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 12px;
+		}
+
+		.day-label {
+			min-width: auto;
+			width: 100%;
+		}
+
+		.time-inputs {
+			width: 100%;
+			gap: 10px;
+		}
+
+		.time-input-group,
+		.teacher-input-group {
+			flex: 1;
+			min-width: 0;
+		}
+
+		.time-input-group input[type="time"],
+		.teacher-input-group select {
+			flex: 1;
+			min-width: 80px;
+			width: 100%;
+		}
+	}
+
+	@media (max-width: 768px) {
+		.day-schedule-row {
+			padding: 10px;
+		}
+
+		.time-inputs {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 8px;
+		}
+
+		.time-input-group,
+		.teacher-input-group {
+			width: 100%;
+		}
+
+		.time-input-group label,
+		.teacher-input-group label {
+			min-width: 50px;
+		}
+
+		.time-separator {
+			display: none;
+		}
+
+		.schedule-days {
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		.day-checkbox {
+			width: 100%;
+			justify-content: flex-start;
+		}
+	}
+
 	@media (prefers-color-scheme: dark) {
 		.loading-screen {
 			background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -3261,107 +3487,6 @@
 		.search-input::placeholder,
 		.form-group input::placeholder {
 			color: #94a3b8;
-		}
-
-		/* Per-Day Schedule Styles */
-		.form-hint {
-			margin: 8px 0 16px 0;
-			font-size: 14px;
-			color: #6b7280;
-			font-style: italic;
-		}
-
-		.day-schedule-row {
-			display: flex;
-			align-items: center;
-			gap: 16px;
-			padding: 12px;
-			margin-bottom: 12px;
-			background: rgba(249, 250, 251, 0.5);
-			border-radius: 8px;
-			border: 1px solid #e5e7eb;
-		}
-
-		.day-label {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			min-width: 120px;
-			font-weight: 500;
-			color: #374151;
-		}
-
-		.day-icon {
-			font-size: 18px;
-		}
-
-		.time-inputs {
-			display: flex;
-			align-items: center;
-			gap: 12px;
-			flex: 1;
-			flex-wrap: wrap;
-		}
-
-		.time-input-group {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-		}
-
-		.time-input-group label {
-			font-size: 14px;
-			color: #6b7280;
-			min-width: 40px;
-		}
-
-		.time-input-group input[type="time"] {
-			padding: 6px 12px;
-			border: 1px solid #d1d5db;
-			border-radius: 6px;
-			font-size: 14px;
-			background: white;
-			transition: all 0.2s;
-		}
-
-		.time-input-group input[type="time"]:focus {
-			outline: none;
-			border-color: #6366f1;
-			box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-		}
-
-		.teacher-input-group {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-		}
-
-		.teacher-input-group label {
-			font-size: 14px;
-			color: #6b7280;
-			min-width: 60px;
-		}
-
-		.teacher-input-group select {
-			padding: 6px 12px;
-			border: 1px solid #d1d5db;
-			border-radius: 6px;
-			font-size: 14px;
-			background: white;
-			transition: all 0.2s;
-			min-width: 160px;
-		}
-
-		.teacher-input-group select:focus {
-			outline: none;
-			border-color: #6366f1;
-			box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-		}
-
-		.time-separator {
-			color: #9ca3af;
-			font-size: 18px;
-			font-weight: 500;
 		}
 	}
 
