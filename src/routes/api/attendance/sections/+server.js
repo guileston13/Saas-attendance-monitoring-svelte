@@ -20,8 +20,13 @@ export async function GET({ request }) {
             // Admin can see all sections
             sections = await getAllSections();
         } else if (session.role === 'Teacher') {
-            // Teacher can only see sections they are assigned to
-            sections = await getTeacherSections(session.userId);
+            if (session.teacherId) {
+                // Teacher can only see sections they are assigned to
+                sections = await getTeacherSections(session.teacherId);
+                console.log(`API: Teacher ${session.teacherId} sections:`, sections.length);
+            } else {
+                console.warn('API: Teacher logged in but no teacherId in session');
+            }
         }
 
         return new Response(JSON.stringify({ 

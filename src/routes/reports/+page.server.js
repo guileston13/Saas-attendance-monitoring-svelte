@@ -19,13 +19,23 @@ export async function load({ request }) {
         const sections = await getAllSections();
         
         return {
-            session,
+            session: {
+                ...session,
+                teacherId: session.teacherId || null,
+                firstName: session.firstName || null,
+                lastName: session.lastName || null
+            },
             sections
         };
     } catch (error) {
         console.error('Load reports error:', error);
         return {
-            session,
+            session: {
+                ...session,
+                teacherId: session.teacherId || null,
+                firstName: session.firstName || null,
+                lastName: session.lastName || null
+            },
             sections: [],
             error: 'Failed to load reports data'
         };

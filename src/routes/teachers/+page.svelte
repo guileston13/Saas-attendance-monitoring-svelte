@@ -409,16 +409,17 @@
 					</div>
 					
 					<div class="form-group">
-						<label for="email">Email:</label>
+						<label for="email">Email (for login account):</label>
 						<input 
 							type="email" 
 							id="email" 
 							bind:value={formData.email}
-							placeholder="Enter email address"
+							placeholder="Enter email to create login account"
 						/>
+						<small class="form-hint">If provided, a login account will be created with default password: teacher123</small>
 					</div>
 					
-					<div class="form-group">
+					<div class="form-group" style="display:none;">
 						<label for="phone">Phone:</label>
 						<input 
 							type="tel" 

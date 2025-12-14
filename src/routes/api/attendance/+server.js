@@ -50,6 +50,7 @@ export async function GET({ request, url }) {
             case 'students':
                 // Get enrolled students
                 data = await getEnrolledStudentsForAttendance(sectionId, subjectId);
+                console.log(`API: Students for section ${sectionId}, subject ${subjectId}:`, data.length);
                 break;
                 
             case 'statistics':

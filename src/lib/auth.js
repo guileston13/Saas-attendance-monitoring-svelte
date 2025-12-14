@@ -18,6 +18,17 @@ export function createSessionToken(userData) {
         timestamp: Date.now()
     };
     
+    // Add teacherId for Teacher role
+    if (userData.teacherId) {
+        sessionData.teacherId = userData.teacherId;
+    }
+    if (userData.firstName) {
+        sessionData.firstName = userData.firstName;
+    }
+    if (userData.lastName) {
+        sessionData.lastName = userData.lastName;
+    }
+    
     // Simple base64 encoding for demo - use JWT in production
     return Buffer.from(JSON.stringify(sessionData)).toString('base64');
 }

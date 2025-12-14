@@ -52,6 +52,25 @@ export async function authenticateUser(email, password) {
 
         // Return user without password
         const { Password: _, ...userWithoutPassword } = user;
+        
+        // If user is a Teacher, get their TeacherID
+        if (user.Role === 'Teacher') {
+            console.log(`Looking for teacher with UserID = ${user.UserID}`);
+            const teacher = await executeQuery(
+                'SELECT TeacherID, FirstName, LastName FROM teachers WHERE UserID = ?',
+                [user.UserID]
+            );
+            console.log(`Teacher query result:`, teacher);
+            if (teacher.length > 0) {
+                userWithoutPassword.teacherId = teacher[0].TeacherID;
+                userWithoutPassword.firstName = teacher[0].FirstName;
+                userWithoutPassword.lastName = teacher[0].LastName;
+                console.log(`Teacher found: TeacherID = ${teacher[0].TeacherID}`);
+            } else {
+                console.warn(`No teacher record found for UserID = ${user.UserID}`);
+            }
+        }
+        
         return userWithoutPassword;
     } catch (error) {
         console.error('Authentication error:', error);

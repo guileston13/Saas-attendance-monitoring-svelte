@@ -29,7 +29,12 @@ export async function load({ request, url }) {
 		if (session.role === 'Admin') {
 			availableSections = await getAllSections();
 		} else if (session.role === 'Teacher') {
-			availableSections = await getTeacherSections(session.userId);
+			if (session.teacherId) {
+				availableSections = await getTeacherSections(session.teacherId);
+				console.log(`Teacher ${session.teacherId} sections:`, availableSections.length);
+			} else {
+				console.warn('Teacher logged in but no teacherId in session');
+			}
 		}
 		
 		// Load subject counts for each section to display in cards
@@ -39,8 +44,8 @@ export async function load({ request, url }) {
 				if (session.role === 'Admin') {
 					const { getSectionSubjects } = await import('../../services/sectionService.js');
 					sectionSubjects = await getSectionSubjects(section.SectionID);
-				} else if (session.role === 'Teacher') {
-					sectionSubjects = await getTeacherSubjectsInSection(session.userId, section.SectionID);
+				} else if (session.role === 'Teacher' && session.teacherId) {
+					sectionSubjects = await getTeacherSubjectsInSection(session.teacherId, section.SectionID);
 				}
 				section.subjectCount = sectionSubjects.length;
 			} catch (error) {
@@ -56,8 +61,8 @@ export async function load({ request, url }) {
 				// Import and use the section service
 				const { getSectionSubjects } = await import('../../services/sectionService.js');
 				availableSubjects = await getSectionSubjects(parseInt(selectedSectionId));
-			} else if (session.role === 'Teacher') {
-				availableSubjects = await getTeacherSubjectsInSection(session.userId, parseInt(selectedSectionId));
+			} else if (session.role === 'Teacher' && session.teacherId) {
+				availableSubjects = await getTeacherSubjectsInSection(session.teacherId, parseInt(selectedSectionId));
 			}
 		}
 		
@@ -71,7 +76,10 @@ export async function load({ request, url }) {
 		}
 		
 		return {
-			session,
+			session: {
+				...session,
+				teacherId: session.teacherId || null
+			},
 			availableSections,
 			availableSubjects,
 			selectedSectionId,

@@ -7,6 +7,8 @@
 	
 	$: session = data.session;
 	
+	console.log('Reports page session:', session);
+	
 	let teachers = [];
 	let selectedTeacher = null;
 	let subjects = [];
@@ -25,7 +27,7 @@
 	onMount(async () => {
 		if (session.role === 'Admin') {
 			await loadTeachers();
-		} else if (session.role === 'Teacher') {
+		} else if (session.role === 'Teacher' && session.teacherId) {
 			// For teachers, directly load their subjects
 			await loadTeacherSubjects(session.teacherId);
 			selectedTeacher = {
@@ -34,6 +36,8 @@
 				LastName: session.lastName || ''
 			};
 			showSubjectsModal = true;
+		} else if (session.role === 'Teacher' && !session.teacherId) {
+			error = 'Your teacher profile is not linked to your account. Please contact admin.';
 		}
 		
 		// Set default date range (current month)

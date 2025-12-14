@@ -1,15 +1,17 @@
 // Teacher service - handles teacher CRUD operations
 import { executeQuery } from './database.js';
+import bcrypt from 'bcryptjs';
 
 /**
- * Get all teachers
+ * Get all teachers with their user email
  * @returns {Promise<Array>} Array of teachers
  */
 export async function getAllTeachers() {
     return await executeQuery(
-        `SELECT t.*, st.StatusName 
+        `SELECT t.*, st.StatusName, u.Email 
          FROM teachers t 
          LEFT JOIN status st ON t.StatusID = st.StatusID 
+         LEFT JOIN users u ON t.UserID = u.UserID
          ORDER BY t.FirstName, t.LastName`
     );
 }
@@ -21,9 +23,10 @@ export async function getAllTeachers() {
  */
 export async function getTeacherById(teacherId) {
     const teachers = await executeQuery(
-        `SELECT t.*, st.StatusName 
+        `SELECT t.*, st.StatusName, u.Email 
          FROM teachers t 
          LEFT JOIN status st ON t.StatusID = st.StatusID 
+         LEFT JOIN users u ON t.UserID = u.UserID
          WHERE t.TeacherID = ?`,
         [teacherId]
     );
@@ -32,7 +35,55 @@ export async function getTeacherById(teacherId) {
 }
 
 /**
- * Create a new teacher
+ * Create a new teacher with optional user account
+ * @param {Object} teacherData - Teacher data including email for user account
+ * @returns {Promise<Object>} Created teacher result with teacherId
+ */
+export async function createTeacherWithUser(teacherData) {
+    const { firstName, lastName, middleName, role, statusId, email } = teacherData;
+    
+    let userId = null;
+    
+    // If email is provided, create a user account first
+    if (email && email.trim()) {
+        // Check if email already exists
+        const existingUser = await executeQuery(
+            'SELECT UserID FROM users WHERE Email = ?',
+            [email]
+        );
+        
+        if (existingUser.length > 0) {
+            throw new Error('Email already exists');
+        }
+        
+        // Create default password (teacher can change it later)
+        const defaultPassword = 'teacher123';
+        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+        
+        // Create user account
+        const userResult = await executeQuery(
+            'INSERT INTO users (Email, Password, Role, StatusID) VALUES (?, ?, ?, ?)',
+            [email, hashedPassword, 'Teacher', statusId]
+        );
+        
+        userId = userResult.insertId;
+    }
+    
+    // Create teacher record
+    const teacherResult = await executeQuery(
+        `INSERT INTO teachers (FirstName, LastName, MiddleName, Role, StatusID, UserID) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [firstName, lastName, middleName, role, statusId, userId]
+    );
+    
+    return { 
+        teacherId: teacherResult.insertId,
+        userId: userId
+    };
+}
+
+/**
+ * Create a new teacher (legacy - without user account)
  * @param {Object} teacherData - Teacher data
  * @returns {Promise<Object>} Created teacher result
  */

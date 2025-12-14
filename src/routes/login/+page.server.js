@@ -24,6 +24,8 @@ export const actions = {
 		try {
 			const user = await authenticateUser(email, password);
 			
+			console.log('User returned from authenticateUser:', user);
+			
 			if (!user) {
 				return fail(400, {
 					error: 'Invalid email or password',
@@ -32,12 +34,16 @@ export const actions = {
 			}
 			
 			console.log('Authentication successful, setting cookie...');
+			console.log('User teacherId:', user.teacherId);
 			
 			// Set cookie using SvelteKit's cookies helper
 			const sessionData = {
 				userId: user.UserID,
 				email: user.Email,
 				role: user.Role,
+				teacherId: user.teacherId || null,
+				firstName: user.firstName || null,
+				lastName: user.lastName || null,
 				timestamp: Date.now()
 			};
 			

@@ -1318,7 +1318,7 @@
                 </svg>
               </div>
               <div class="btn-content">
-                <span class="btn-title">Face Login</span>
+                <span class="btn-title">Face Logins</span>
                 <span class="btn-subtitle">AI-powered recognition</span>
               </div>
               <div class="btn-arrow">→</div>

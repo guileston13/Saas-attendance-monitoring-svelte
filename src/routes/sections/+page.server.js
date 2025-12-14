@@ -1,7 +1,7 @@
 // Improved sections page with subject-based enrollment
 import { redirect } from '@sveltejs/kit';
 import { getSessionFromCookies, isAuthenticated, hasRole } from '../../lib/auth.js';
-import { getAllSections, getSectionById, getSectionSubjects, createSection, updateSection, deleteSection, addSubjectToSection, addSubjectToSectionSimple } from '../../services/sectionService.js';
+import { getAllSections, getSectionById, getSectionSubjects, createSection, updateSection, deleteSection, addSubjectToSection, addSubjectToSectionSimple, getSectionsByTeacher } from '../../services/sectionService.js';
 import { getAllSubjects } from '../../services/subjectService.js';
 import { getAllTeachers } from '../../services/teacherService.js';
 import { getAllStudents, addStudentToSection, getStudentsBySection } from '../../services/studentService.js';
@@ -25,14 +25,37 @@ export async function load({ request, url }) {
 		let selectedSection = null;
 		let sectionSubjects = [];
 
-		// Load all sections
-		const sections = await getAllSections();
+		// Load sections based on user role
+		let sections = [];
+		if (session.role === 'Admin') {
+			sections = await getAllSections();
+		} else if (session.role === 'Teacher') {
+			if (session.teacherId) {
+				// Teachers only see their assigned sections
+				sections = await getSectionsByTeacher(session.teacherId);
+				console.log(`Teacher ${session.teacherId} sections loaded:`, sections.length);
+			} else {
+				console.warn('Teacher logged in but no teacherId in session');
+			}
+		}
 
 		// If a section is selected, load its details
 		if (selectedSectionId) {
 			selectedSection = await getSectionById(parseInt(selectedSectionId));
 			if (selectedSection) {
 				sectionSubjects = await getSectionSubjects(parseInt(selectedSectionId));
+				
+				// For teachers, filter subjects to only show their assigned ones
+				if (session.role === 'Teacher' && session.teacherId) {
+					sectionSubjects = sectionSubjects.filter(sub => 
+						sub.TeacherID === session.teacherId ||
+						sub.MondayTeacher === session.teacherId ||
+						sub.TuesdayTeacher === session.teacherId ||
+						sub.WednesdayTeacher === session.teacherId ||
+						sub.ThursdayTeacher === session.teacherId ||
+						sub.FridayTeacher === session.teacherId
+					);
+				}
 			}
 		}
 
@@ -54,7 +77,10 @@ export async function load({ request, url }) {
 		}
 
 		return {
-			session,
+			session: {
+				...session,
+				teacherId: session.teacherId || null
+			},
 			sections,
 			selectedSection,
 			sectionSubjects,
@@ -68,7 +94,10 @@ export async function load({ request, url }) {
 	} catch (error) {
 		console.error('Sections load error:', error);
 		return {
-			session,
+			session: {
+				...session,
+				teacherId: session.teacherId || null
+			},
 			sections: [],
 			selectedSection: null,
 			sectionSubjects: [],

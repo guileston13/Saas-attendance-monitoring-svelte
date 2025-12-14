@@ -39,7 +39,7 @@ const deviceProcessingLock = new Map(); // Map<deviceSessionId, {startTime, room
 const studentRecognitionCooldown = new Map();
 
 // Cooldown configuration
-const STUDENT_COOLDOWN_MS = 5 * 1000; // 5 seconds before same student can be recognized again
+const STUDENT_COOLDOWN_MS = 3 * 1000; // 5 seconds before same student can be recognized again
 const DEVICE_LOCK_TIMEOUT_MS = 15 * 1000; // 15 seconds max lock time (auto-release if stuck)
 const REQUEST_THROTTLE_MS = 500; // Minimum time between requests from same device
 

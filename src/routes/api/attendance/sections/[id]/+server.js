@@ -5,6 +5,12 @@ import { getTeacherSubjectsInSection } from '../../../../../services/attendanceS
 
 export async function GET({ request, params }) {
     const session = getSessionFromCookies(request.headers.get('cookie'));
+    
+    console.log('GET /api/attendance/sections/[id] - Session:', {
+        role: session?.role,
+        teacherId: session?.teacherId,
+        userId: session?.userId
+    });
 
     if (!isAuthenticated(session) || !hasRole(session, ['Admin', 'Teacher'])) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -15,6 +21,7 @@ export async function GET({ request, params }) {
 
     try {
         const sectionId = parseInt(params.id);
+        console.log('Section ID requested:', sectionId);
         
         if (isNaN(sectionId)) {
             return new Response(JSON.stringify({ error: 'Invalid section ID' }), {
@@ -28,9 +35,16 @@ export async function GET({ request, params }) {
         if (session.role === 'Admin') {
             // Admin can see all subjects in the section
             subjects = await getSectionSubjects(sectionId);
+            console.log(`Admin subjects in section ${sectionId}:`, subjects.length);
         } else if (session.role === 'Teacher') {
-            // Teacher can only see subjects they are assigned to in this section
-            subjects = await getTeacherSubjectsInSection(session.userId, sectionId);
+            if (session.teacherId) {
+                // Teacher can only see subjects they are assigned to in this section
+                subjects = await getTeacherSubjectsInSection(session.teacherId, sectionId);
+                console.log(`Teacher ${session.teacherId} subjects in section ${sectionId}:`, subjects.length, subjects);
+            } else {
+                console.warn('API: Teacher logged in but no teacherId in session');
+                console.warn('Full session:', session);
+            }
         }
 
         return new Response(JSON.stringify({ 

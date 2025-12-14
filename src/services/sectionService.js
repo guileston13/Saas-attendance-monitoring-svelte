@@ -27,6 +27,38 @@ export async function getAllSections() {
 }
 
 /**
+ * Get sections for a specific teacher (only sections where they have subjects assigned)
+ * @param {number} teacherId - Teacher ID
+ * @returns {Promise<Array>} Array of sections assigned to the teacher
+ */
+export async function getSectionsByTeacher(teacherId) {
+    const sections = await executeQuery(`
+        SELECT DISTINCT
+            s.SectionID,
+            s.SectionName,
+            s.StatusID,
+            st.StatusName,
+            COUNT(DISTINCT ss.SubjectID) as SubjectCount,
+            COUNT(DISTINCT se.StudentID) as TotalStudents,
+            s.CreatedAt
+        FROM sections s
+        INNER JOIN section_subjects ss ON s.SectionID = ss.SectionID
+        LEFT JOIN status st ON s.StatusID = st.StatusID
+        LEFT JOIN subject_enrollments se ON s.SectionID = se.SectionID AND se.Status = 'Active'
+        WHERE ss.TeacherID = ?
+           OR ss.MondayTeacher = ?
+           OR ss.TuesdayTeacher = ?
+           OR ss.WednesdayTeacher = ?
+           OR ss.ThursdayTeacher = ?
+           OR ss.FridayTeacher = ?
+        GROUP BY s.SectionID, s.SectionName, s.StatusID, st.StatusName, s.CreatedAt
+        ORDER BY s.SectionName
+    `, [teacherId, teacherId, teacherId, teacherId, teacherId, teacherId]);
+
+    return sections;
+}
+
+/**
  * Get section by ID with full details
  * @param {number} sectionId - Section ID
  * @returns {Promise<Object|null>} Section details or null

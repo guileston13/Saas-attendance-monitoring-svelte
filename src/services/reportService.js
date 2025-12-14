@@ -34,6 +34,7 @@ export async function getTeacherSubjects(teacherId) {
             s.SectionName,
             sub.subject_name,
             sub.subject_code,
+            ss.TeacherID,
             ss.MondayTeacher,
             ss.TuesdayTeacher,
             ss.WednesdayTeacher,
@@ -42,7 +43,8 @@ export async function getTeacherSubjects(teacherId) {
         FROM section_subjects ss
         JOIN sections s ON ss.SectionID = s.SectionID
         JOIN subjects sub ON ss.SubjectID = sub.SubjectID
-        WHERE (ss.MondayTeacher = ? 
+        WHERE (ss.TeacherID = ?
+            OR ss.MondayTeacher = ? 
             OR ss.TuesdayTeacher = ? 
             OR ss.WednesdayTeacher = ? 
             OR ss.ThursdayTeacher = ? 
@@ -51,7 +53,7 @@ export async function getTeacherSubjects(teacherId) {
         ORDER BY sub.subject_name, s.SectionName
     `;
     
-    return await executeQuery(query, [teacherId, teacherId, teacherId, teacherId, teacherId]);
+    return await executeQuery(query, [teacherId, teacherId, teacherId, teacherId, teacherId, teacherId]);
 }
 
 /**

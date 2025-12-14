@@ -301,10 +301,10 @@ export async function getAttendanceStatistics(sectionId, subjectId, year, month)
 
 /**
  * Get sections accessible by a teacher (based on their subject assignments)
- * @param {number} teacherUserId - Teacher's user ID
+ * @param {number} teacherId - Teacher ID
  * @returns {Promise<Array>} Array of accessible sections
  */
-export async function getTeacherSections(teacherUserId) {
+export async function getTeacherSections(teacherId) {
     const query = `
         SELECT DISTINCT
             s.SectionID,
@@ -312,38 +312,48 @@ export async function getTeacherSections(teacherUserId) {
             s.CreatedAt
         FROM sections s
         JOIN section_subjects ss ON s.SectionID = ss.SectionID
-        JOIN teachers t ON ss.TeacherID = t.TeacherID
-        WHERE t.UserID = ? AND s.StatusID = 1
+        WHERE (ss.TeacherID = ? 
+           OR ss.MondayTeacher = ?
+           OR ss.TuesdayTeacher = ?
+           OR ss.WednesdayTeacher = ?
+           OR ss.ThursdayTeacher = ?
+           OR ss.FridayTeacher = ?)
+        AND s.StatusID = 1
         ORDER BY s.SectionName
     `;
     
-    return await executeQuery(query, [teacherUserId]);
+    return await executeQuery(query, [teacherId, teacherId, teacherId, teacherId, teacherId, teacherId]);
 }
 
 /**
  * Get subjects accessible by a teacher in a specific section
- * @param {number} teacherUserId - Teacher's user ID
+ * @param {number} teacherId - Teacher ID
  * @param {number} sectionId - Section ID
  * @returns {Promise<Array>} Array of accessible subjects
  */
-export async function getTeacherSubjectsInSection(teacherUserId, sectionId) {
+export async function getTeacherSubjectsInSection(teacherId, sectionId) {
     const query = `
         SELECT DISTINCT
-            sub.SubjectID as subject_id,
+            sub.SubjectID,
             sub.subject_name,
             sub.subject_code,
             ss.StartTime,
-            ss.EndTime
+            ss.EndTime,
+            ss.SectionID
         FROM subjects sub
         JOIN section_subjects ss ON sub.SubjectID = ss.SubjectID
-        JOIN teachers t ON ss.TeacherID = t.TeacherID
-        WHERE t.UserID = ? 
+        WHERE (ss.TeacherID = ?
+           OR ss.MondayTeacher = ?
+           OR ss.TuesdayTeacher = ?
+           OR ss.WednesdayTeacher = ?
+           OR ss.ThursdayTeacher = ?
+           OR ss.FridayTeacher = ?)
         AND ss.SectionID = ?
         AND sub.StatusID = 1
         ORDER BY sub.subject_name
     `;
     
-    return await executeQuery(query, [teacherUserId, sectionId]);
+    return await executeQuery(query, [teacherId, teacherId, teacherId, teacherId, teacherId, teacherId, sectionId]);
 }
 
 /**
