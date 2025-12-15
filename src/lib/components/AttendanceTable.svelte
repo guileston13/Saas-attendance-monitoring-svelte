@@ -9,8 +9,36 @@
 	
 	const dispatch = createEventDispatcher();
 	
+	function hasConsecutiveAbsences(studentId, currentDate, count = 3) {
+		if (!attendanceData[studentId]) return false;
+		// Find the current date index in `days`
+		const currentIndex = days.findIndex(d => d.date === currentDate);
+		if (currentIndex === -1) return false;
+		let consecutiveCount = 0;
+		for (let i = currentIndex; i >= 0 && consecutiveCount < count; i--) {
+			const status = attendanceData[studentId][days[i].date];
+			if (status === 'absent') consecutiveCount++;
+			else break;
+		}
+		return consecutiveCount >= count;
+	}
+	
+	function getFirstDropDate(studentId) {
+		if (!attendanceData[studentId]) return null;
+		const dates = Object.keys(attendanceData[studentId])
+			.filter(d => attendanceData[studentId][d] === 'drop')
+			.sort();
+		return dates.length > 0 ? dates[0] : null;
+	}
+
 	function toggleAttendance(studentId, date) {
 		if (readOnly) return;
+
+		const firstDrop = getFirstDropDate(studentId);
+		if (firstDrop && date >= firstDrop) {
+			dispatch('attendanceError', { studentId, date, message: 'Student has been dropped; attendance cannot be modified.' });
+			return;
+		}
 		
 		const current = attendanceData[studentId]?.[date] || 'no-record';
 		const newStatus = current === 'present' ? 'absent' : 'present';
@@ -71,6 +99,10 @@
 				<span class="legend-icon no-record">➖</span>
 				<span>No Record</span>
 			</div>
+			<div class="legend-item">
+				<span class="legend-icon drop">💣</span>
+				<span>Dropped</span>
+			</div>
 		</div>
 	</div>
 
@@ -103,13 +135,16 @@
 						</td>
 						{#each days as day}
 							{@const status = getAttendanceStatus(student.StudentID, day.date)}
+						{@const firstDrop = getFirstDropDate(student.StudentID)}
+						{@const isDisabledForDay = firstDrop && day.date > firstDrop}
 							<td class="attendance-cell">
 								<button 
 									class="attendance-button {status}"
 									class:readonly={readOnly}
+								class:can-drop={status === 'absent' && hasConsecutiveAbsences(student.StudentID, day.date, 3)}
 									on:click={() => toggleAttendance(student.StudentID, day.date)}
-									disabled={readOnly}
-									title={readOnly ? `${status === 'no-record' ? 'No Record' : status} (Read-only)` : `Click to mark ${status === 'present' ? 'absent' : 'present'}`}
+									disabled={readOnly || (isDisabledForDay && status !== 'drop')}
+							title={isDisabledForDay ? 'Student has been dropped; no further attendance allowed' : (status === 'drop' && !readOnly ? 'Dropped — click to undrop' : (readOnly ? `${status === 'no-record' ? 'No Record' : status} (Read-only)` : `Click to mark ${status === 'present' ? 'absent' : 'present}`))}
 								>
 									{#if status === 'present'}
 										✅
@@ -334,6 +369,26 @@
 	
 	.attendance-button.absent {
 		background: rgba(231, 76, 60, 0.1);
+	}
+
+	.attendance-button.drop {
+		background: rgba(142, 68, 173, 0.15);
+		color: #8e44ad;
+		font-weight: bold;
+	}
+
+	.attendance-button.can-drop {
+		animation: pulse 1.5s ease-in-out infinite;
+		box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.3);
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.3);
+		}
+		50% {
+			box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.5);
+		}
 	}
 
 	.attendance-button.no-record {

@@ -130,6 +130,14 @@ export async function getEnrolledStudentsForAttendance(sectionId, subjectId) {
  * @returns {Promise<Object>} Database result
  */
 export async function updateAttendanceRecord(studentId, subjectId, sectionId, date, status, recordedBy, loginTime = null) {
+    // Prevent changes if the student has already been dropped on or before this date
+    // Prevent changes if student was dropped before this date (allow modifying the drop date itself to undrop)
+    const dropCheckQuery = `SELECT attendance_date FROM attendance_records WHERE student_id = ? AND subject_id = ? AND section_id = ? AND status = 'Drop' AND attendance_date < ? LIMIT 1`;
+    const dropResult = await executeQuery(dropCheckQuery, [studentId, subjectId, sectionId, date]);
+    if (dropResult.length > 0) {
+        throw new Error('Student has been dropped before this date; attendance cannot be modified.');
+    }
+
     // If loginTime not provided and status is Present or Late, use current time
     if (!loginTime && (status === 'Present' || status === 'Late')) {
         const now = new Date();
@@ -159,7 +167,21 @@ export async function bulkUpdateAttendance(attendanceUpdates) {
         return { affectedRows: 0 };
     }
     
-    const values = attendanceUpdates.map(update => [
+    // Filter out updates for students who are already dropped on or before the update date
+    const filtered = [];
+    for (const update of attendanceUpdates) {
+        const dropCheckQuery = `SELECT attendance_date FROM attendance_records WHERE student_id = ? AND subject_id = ? AND section_id = ? AND status = 'Drop' AND attendance_date < ? LIMIT 1`;
+        const dropResult = await executeQuery(dropCheckQuery, [update.studentId, update.subjectId, update.sectionId, update.date]);
+        if (!dropResult || dropResult.length === 0) {
+            filtered.push(update);
+        }
+    }
+
+    if (filtered.length === 0) {
+        return { affectedRows: 0 };
+    }
+
+    const values = filtered.map(update => [
         update.studentId,
         update.subjectId, 
         update.sectionId,

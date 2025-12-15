@@ -248,6 +248,14 @@
 		const studentIdStr = studentId.toString();
 		const current = attendanceData[studentIdStr]?.[date] || 'no-record';
 		
+		// Prevent any changes if student was dropped before this date (allow undropping on the drop date)
+		const firstDrop = getFirstDropDate(studentId);
+		if (firstDrop && date > firstDrop) {
+			error = 'Student was dropped before this date; attendance cannot be modified.';
+			setTimeout(() => { error = null; }, 3000);
+			return;
+		}
+		
 		// Cycle through statuses: no-record/absent -> present -> absent -> (if 3 consecutive) drop -> present
 		let newStatus;
 		if (current === 'present') {
@@ -344,12 +352,21 @@
 			const status = attendanceData[studentId][calendarDays[i].date];
 			if (status === 'absent') {
 				consecutiveCount++;
-			} else if (status !== 'no-record') {
-				break; // Stop if we hit a present/late status
+			} else {
+				break; // Stop if we hit a non-absent status
 			}
 		}
 		
 		return consecutiveCount >= count;
+	}
+
+	// Return the earliest date string where a student has 'drop' status, or null
+	function getFirstDropDate(studentId) {
+		if (!attendanceData[studentId]) return null;
+		const dates = Object.keys(attendanceData[studentId])
+			.filter(d => attendanceData[studentId][d] === 'drop')
+			.sort();
+		return dates.length > 0 ? dates[0] : null;
 	}
 
 	// Count attendance statistics
@@ -572,6 +589,26 @@
 						</div>
 					</div>
 
+					<!-- Legend -->
+					<div class="legend">
+						<div class="legend-item">
+							<span class="legend-icon present">✅</span>
+							<span>Present</span>
+						</div>
+						<div class="legend-item">
+							<span class="legend-icon absent">❌</span>
+							<span>Absent</span>
+						</div>
+						<div class="legend-item">
+							<span class="legend-icon no-record">➖</span>
+							<span>No Record</span>
+						</div>
+						<div class="legend-item">
+							<span class="legend-icon drop">💣</span>
+							<span>Dropped</span>
+						</div>
+					</div>
+
 					<!-- Attendance Table -->
 					<div class="table-wrapper">
 						<table class="attendance-table">
@@ -601,6 +638,8 @@
 										</td>
 										{#each calendarDays as day, dayIndex}
 											{@const status = attendanceData[student.StudentID]?.[day.date] || 'no-record'}
+							{@const firstDrop = getFirstDropDate(student.StudentID)}
+							{@const isDisabledForDay = firstDrop && day.date > firstDrop}
 											{@const canDrop = status === 'absent' && hasConsecutiveAbsences(student.StudentID, day.date, 3)}
 											<td class="attendance-cell">
 												<button 
@@ -611,8 +650,8 @@
 														e.stopPropagation();
 														toggleAttendance(student.StudentID, day.date);
 													}}
-													title="Click to toggle attendance for {day.dayName} {day.day} - Current: {status === 'no-record' ? 'No Record' : status}{canDrop ? ' (Click to mark as Dropped - 3 consecutive absences)' : ''}"
-													disabled={updating}
+													title={isDisabledForDay ? 'Student has been dropped; no further attendance allowed' : (status === 'drop' ? 'Dropped — click to undrop' : `Click to toggle attendance for ${day.dayName} ${day.day} - Current: ${status === 'no-record' ? 'No Record' : status}${canDrop ? ' (Click to mark as Dropped - 3 consecutive absences)' : ''}`)}
+													disabled={updating || (isDisabledForDay && status !== 'drop')}
 												>
 													{#if status === 'present'}
 														✅
