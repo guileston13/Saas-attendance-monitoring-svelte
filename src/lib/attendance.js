@@ -123,16 +123,17 @@ export function getWeekdayDescription(weekdaysPattern) {
  */
 export function calculateAttendanceStats(attendanceRecord) {
 	if (!attendanceRecord || typeof attendanceRecord !== 'object') {
-		return { present: 0, absent: 0, total: 0, percentage: 0 };
+		return { present: 0, absent: 0, dropped: 0, total: 0, percentage: 0 };
 	}
 	
 	const records = Object.values(attendanceRecord);
 	const present = records.filter(status => status === 'present').length;
 	const absent = records.filter(status => status === 'absent').length;
+	const dropped = records.filter(status => status === 'drop').length;
 	const total = records.length;
 	const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
 	
-	return { present, absent, total, percentage };
+	return { present, absent, dropped, total, percentage };
 }
 
 /**

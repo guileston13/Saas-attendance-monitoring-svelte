@@ -247,7 +247,23 @@
 		
 		const studentIdStr = studentId.toString();
 		const current = attendanceData[studentIdStr]?.[date] || 'no-record';
-		const newStatus = current === 'present' ? 'Absent' : 'Present'; // Database expects capitalized
+		
+		// Cycle through statuses: no-record/absent -> present -> absent -> (if 3 consecutive) drop -> present
+		let newStatus;
+		if (current === 'present') {
+			newStatus = 'Absent';
+		} else if (current === 'absent') {
+			// Check if this would be 3rd consecutive absence
+			if (hasConsecutiveAbsences(studentId, date, 3)) {
+				newStatus = 'Drop'; // Mark as dropped
+			} else {
+				newStatus = 'Present';
+			}
+		} else if (current === 'drop') {
+			newStatus = 'Present';
+		} else {
+			newStatus = 'Present';
+		}
 		
 		updating = true;
 		
@@ -314,16 +330,39 @@
 		return month ? month.label : '';
 	}
 	
+	// Check if student has 3 consecutive absences
+	function hasConsecutiveAbsences(studentId, currentDate, count = 3) {
+		if (!attendanceData[studentId]) return false;
+		
+		// Find the current date index
+		const currentIndex = calendarDays.findIndex(day => day.date === currentDate);
+		if (currentIndex === -1) return false;
+		
+		// Check backwards for consecutive absences
+		let consecutiveCount = 0;
+		for (let i = currentIndex; i >= 0 && consecutiveCount < count; i--) {
+			const status = attendanceData[studentId][calendarDays[i].date];
+			if (status === 'absent') {
+				consecutiveCount++;
+			} else if (status !== 'no-record') {
+				break; // Stop if we hit a present/late status
+			}
+		}
+		
+		return consecutiveCount >= count;
+	}
+
 	// Count attendance statistics
 	function getAttendanceStats(studentId) {
-		if (!attendanceData[studentId]) return { present: 0, absent: 0, noRecord: 0, total: 0 };
+		if (!attendanceData[studentId]) return { present: 0, absent: 0, noRecord: 0, dropped: 0, total: 0 };
 		
 		const records = Object.values(attendanceData[studentId]);
 		const present = records.filter(status => status === 'present' || status === 'late').length;
 		const absent = records.filter(status => status === 'absent').length;
 		const noRecord = records.filter(status => status === 'no-record').length;
+		const dropped = records.filter(status => status === 'drop').length;
 		
-		return { present, absent, noRecord, total: records.length };
+		return { present, absent, noRecord, dropped, total: records.length };
 	}
 	
 	onMount(() => {
@@ -562,21 +601,25 @@
 										</td>
 										{#each calendarDays as day, dayIndex}
 											{@const status = attendanceData[student.StudentID]?.[day.date] || 'no-record'}
+											{@const canDrop = status === 'absent' && hasConsecutiveAbsences(student.StudentID, day.date, 3)}
 											<td class="attendance-cell">
 												<button 
 													class="attendance-btn {status}"
+													class:can-drop={canDrop}
 													on:click={(e) => {
 														e.preventDefault();
 														e.stopPropagation();
 														toggleAttendance(student.StudentID, day.date);
 													}}
-													title="Click to toggle attendance for {day.dayName} {day.day} - Current: {status === 'no-record' ? 'No Record' : status}"
+													title="Click to toggle attendance for {day.dayName} {day.day} - Current: {status === 'no-record' ? 'No Record' : status}{canDrop ? ' (Click to mark as Dropped - 3 consecutive absences)' : ''}"
 													disabled={updating}
 												>
 													{#if status === 'present'}
 														✅
 													{:else if status === 'late'}
 														⏰
+													{:else if status === 'drop'}
+														💣
 													{:else if status === 'absent'}
 														❌
 													{:else}
@@ -589,7 +632,9 @@
 											<div class="student-stats">
 												<span class="present-count">✅ {stats.present}</span>
 												<span class="absent-count">❌ {stats.absent}</span>
-												<span class="no-record-count">➖ {stats.noRecord}</span>
+												{#if stats.dropped > 0}
+													<span class="dropped-count">💣 {stats.dropped}</span>
+												{/if}
 												<span class="percentage">
 													{stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0}%
 												</span>
@@ -980,6 +1025,26 @@
 		background: rgba(149, 165, 166, 0.15);
 		color: #7f8c8d;
 	}
+
+	.attendance-btn.drop {
+		background: rgba(142, 68, 173, 0.15);
+		color: #8e44ad;
+		font-weight: bold;
+	}
+
+	.attendance-btn.can-drop {
+		animation: pulse 1.5s ease-in-out infinite;
+		box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.3);
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.3);
+		}
+		50% {
+			box-shadow: 0 0 0 4px rgba(231, 76, 60, 0.5);
+		}
+	}
 	
 	.attendance-btn:disabled {
 		opacity: 0.6;
@@ -1004,6 +1069,11 @@
 	
 	.no-record-count {
 		color: #7f8c8d;
+	}
+
+	.dropped-count {
+		color: #8e44ad;
+		font-weight: bold;
 	}
 	
 	.percentage {
