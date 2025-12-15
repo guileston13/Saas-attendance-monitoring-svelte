@@ -2689,6 +2689,7 @@
 
 	.panel-available {
 		border-left: 3px solid #3b82f6;
+		max-height: 450px;
 	}
 
 	.panel-header {

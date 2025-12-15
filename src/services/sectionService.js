@@ -216,7 +216,7 @@ export async function addSubjectToSection(sectionId, subjectId, teacherId = null
             ThursdayStart, ThursdayEnd, ThursdayTeacher, ThursdayRoom,
             FridayStart, FridayEnd, FridayTeacher, FridayRoom,
             SaturdayStart, SaturdayEnd, SaturdayTeacher, SaturdayRoom
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             sectionId, subjectId, teacherId, roomId, startTime, endTime,
             monday, tuesday, wednesday, thursday, friday, saturday,
