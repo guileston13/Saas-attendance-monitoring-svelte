@@ -142,7 +142,7 @@ export async function updateAttendanceRecord(studentId, subjectId, sectionId, da
         ON DUPLICATE KEY UPDATE 
         status = VALUES(status),
         login_time = VALUES(login_time),
-        recorded_by = VALUES(recorded_by),
+        recorded_by = VALUES(recorded_by)
     `;
     
     const params = [studentId, subjectId, sectionId, date, status, loginTime, recordedBy];
@@ -176,7 +176,7 @@ export async function bulkUpdateAttendance(attendanceUpdates) {
         VALUES ${placeholders}
         ON DUPLICATE KEY UPDATE 
         status = VALUES(status),
-        recorded_by = VALUES(recorded_by),
+        recorded_by = VALUES(recorded_by)
     `;
     
     return await executeQuery(query, flatValues);

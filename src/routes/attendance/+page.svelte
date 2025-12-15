@@ -193,10 +193,10 @@
 						tempAttendanceData[studentIdStr] = {};
 					}
 					
-					// Fill in missing dates with 'absent' for UI consistency
+					// Fill in missing dates with 'no-record' (not in database, different from 'absent')
 					calendarDays.forEach(day => {
 						if (!tempAttendanceData[studentIdStr][day.date]) {
-							tempAttendanceData[studentIdStr][day.date] = 'absent';
+							tempAttendanceData[studentIdStr][day.date] = 'no-record';
 						}
 					});
 				});
@@ -246,7 +246,7 @@
 		if (updating) return; // Prevent multiple simultaneous updates
 		
 		const studentIdStr = studentId.toString();
-		const current = attendanceData[studentIdStr]?.[date] || 'absent';
+		const current = attendanceData[studentIdStr]?.[date] || 'no-record';
 		const newStatus = current === 'present' ? 'Absent' : 'Present'; // Database expects capitalized
 		
 		updating = true;
@@ -319,13 +319,14 @@
 	
 	// Count attendance statistics
 	function getAttendanceStats(studentId) {
-		if (!attendanceData[studentId]) return { present: 0, absent: 0, total: 0 };
+		if (!attendanceData[studentId]) return { present: 0, absent: 0, noRecord: 0, total: 0 };
 		
 		const records = Object.values(attendanceData[studentId]);
 		const present = records.filter(status => status === 'present' || status === 'late').length;
 		const absent = records.filter(status => status === 'absent').length;
+		const noRecord = records.filter(status => status === 'no-record').length;
 		
-		return { present, absent, total: records.length };
+		return { present, absent, noRecord, total: records.length };
 	}
 	
 	onMount(() => {
@@ -563,7 +564,7 @@
 											</div>
 										</td>
 										{#each calendarDays as day, dayIndex}
-											{@const status = attendanceData[student.StudentID]?.[day.date] || 'absent'}
+											{@const status = attendanceData[student.StudentID]?.[day.date] || 'no-record'}
 											<td class="attendance-cell">
 												<button 
 													class="attendance-btn {status}"
@@ -572,15 +573,17 @@
 														e.stopPropagation();
 														toggleAttendance(student.StudentID, day.date);
 													}}
-													title="Click to toggle attendance for {day.dayName} {day.day} - Current: {status}"
+													title="Click to toggle attendance for {day.dayName} {day.day} - Current: {status === 'no-record' ? 'No Record' : status}"
 													disabled={updating}
 												>
 													{#if status === 'present'}
 														✅
 													{:else if status === 'late'}
 														⏰
-													{:else}
+													{:else if status === 'absent'}
 														❌
+													{:else}
+														➖
 													{/if}
 												</button>
 											</td>
@@ -589,6 +592,7 @@
 											<div class="student-stats">
 												<span class="present-count">✅ {stats.present}</span>
 												<span class="absent-count">❌ {stats.absent}</span>
+												<span class="no-record-count">➖ {stats.noRecord}</span>
 												<span class="percentage">
 													{stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0}%
 												</span>
@@ -974,6 +978,11 @@
 	.attendance-btn.absent {
 		background: rgba(231, 76, 60, 0.1);
 	}
+
+	.attendance-btn.no-record {
+		background: rgba(149, 165, 166, 0.15);
+		color: #7f8c8d;
+	}
 	
 	.attendance-btn:disabled {
 		opacity: 0.6;
@@ -994,6 +1003,10 @@
 	
 	.absent-count {
 		color: #e74c3c;
+	}
+	
+	.no-record-count {
+		color: #7f8c8d;
 	}
 	
 	.percentage {

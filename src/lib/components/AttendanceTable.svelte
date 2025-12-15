@@ -12,7 +12,7 @@
 	function toggleAttendance(studentId, date) {
 		if (readOnly) return;
 		
-		const current = attendanceData[studentId]?.[date] || 'absent';
+		const current = attendanceData[studentId]?.[date] || 'no-record';
 		const newStatus = current === 'present' ? 'absent' : 'present';
 		
 		dispatch('attendanceChange', {
@@ -24,7 +24,7 @@
 	}
 	
 	function getAttendanceStatus(studentId, date) {
-		return attendanceData[studentId]?.[date] || 'absent';
+		return attendanceData[studentId]?.[date] || 'no-record';
 	}
 	
 	$: classroomStats = {
@@ -67,6 +67,10 @@
 				<span class="legend-icon absent">❌</span>
 				<span>Absent</span>
 			</div>
+			<div class="legend-item">
+				<span class="legend-icon no-record">➖</span>
+				<span>No Record</span>
+			</div>
 		</div>
 	</div>
 
@@ -105,9 +109,15 @@
 									class:readonly={readOnly}
 									on:click={() => toggleAttendance(student.StudentID, day.date)}
 									disabled={readOnly}
-									title={readOnly ? `${status} (Read-only)` : `Click to mark ${status === 'present' ? 'absent' : 'present'}`}
+									title={readOnly ? `${status === 'no-record' ? 'No Record' : status} (Read-only)` : `Click to mark ${status === 'present' ? 'absent' : 'present'}`}
 								>
-									{status === 'present' ? '✅' : '❌'}
+									{#if status === 'present'}
+										✅
+									{:else if status === 'absent'}
+										❌
+									{:else}
+										➖
+									{/if}
 								</button>
 							</td>
 						{/each}
@@ -324,6 +334,11 @@
 	
 	.attendance-button.absent {
 		background: rgba(231, 76, 60, 0.1);
+	}
+
+	.attendance-button.no-record {
+		background: rgba(149, 165, 166, 0.15);
+		color: #7f8c8d;
 	}
 	
 	.attendance-button.readonly {

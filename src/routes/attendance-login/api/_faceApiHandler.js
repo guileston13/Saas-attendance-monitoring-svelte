@@ -1139,8 +1139,7 @@ export async function recordAttendance(studentId, subjectId, sectionId, teacherI
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE 
         login_time = VALUES(login_time),
-        status = VALUES(status),
-        
+        status = VALUES(status)
     `;
 
     const result = await executeQuery(query, [studentId, subId, secId, today, loginTime, status, teachId]);
