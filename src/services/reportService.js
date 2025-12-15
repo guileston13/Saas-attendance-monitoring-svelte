@@ -239,7 +239,6 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
             attendanceData[record.StudentID].attendance[dateStr] = {
                 status,
                 displayStatus,
-                recordedAt: record.recorded_at,
                 dayOfWeek: record.day_of_week_name,
                 teacher: teacherName
             };

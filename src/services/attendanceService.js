@@ -52,7 +52,6 @@ export async function getAttendanceRecords(sectionId, subjectId, year, month) {
             ar.attendance_date,
             ar.status,
             ar.recorded_by,
-            ar.recorded_at,
             s.FirstName,
             s.LastName,
             s.MiddleName,
@@ -86,8 +85,8 @@ export async function getAttendanceRecords(sectionId, subjectId, year, month) {
         const dateStr = formatDateString(record.attendance_date);
         attendanceData[record.student_id].attendance[dateStr] = {
             status: record.status.toLowerCase(),
-            recordedBy: record.recorded_by,
-            recordedAt: record.recorded_at
+            recordedBy: record.recorded_by
+           
         };
     });
     
@@ -144,7 +143,6 @@ export async function updateAttendanceRecord(studentId, subjectId, sectionId, da
         status = VALUES(status),
         login_time = VALUES(login_time),
         recorded_by = VALUES(recorded_by),
-        recorded_at = CURRENT_TIMESTAMP
     `;
     
     const params = [studentId, subjectId, sectionId, date, status, loginTime, recordedBy];
@@ -179,7 +177,6 @@ export async function bulkUpdateAttendance(attendanceUpdates) {
         ON DUPLICATE KEY UPDATE 
         status = VALUES(status),
         recorded_by = VALUES(recorded_by),
-        recorded_at = CURRENT_TIMESTAMP
     `;
     
     return await executeQuery(query, flatValues);
