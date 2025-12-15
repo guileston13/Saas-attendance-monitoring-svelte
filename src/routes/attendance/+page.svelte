@@ -279,9 +279,6 @@
 				
 				// Trigger reactivity
 				attendanceData = { ...attendanceData };
-				
-				// Also reload data in background to ensure consistency
-				setTimeout(() => loadAttendanceData(), 100);
 			} else {
 				const errorResult = await response.json();
 				throw new Error(errorResult.error || 'Failed to update attendance');
