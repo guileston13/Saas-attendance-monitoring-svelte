@@ -311,10 +311,10 @@ preloadDescriptorCache().catch(err => console.error('Descriptor preload failed:'
  */
 function logAttendanceRecord(record, action = 'INSERT') {
   try {
-    const { id, student_id, subject_id, class_subject_id, section_id, attendance_date, login_time, status, recorded_by, recorded_at } = record;
+    const { id, student_id, subject_id, class_subject_id, section_id, attendance_date, login_time, status, recorded_by } = record;
     
     // Format the log entry (tab-separated)
-    const logEntry = `${id || ''}\t${student_id}\t${subject_id}\t${class_subject_id || ''}\t${section_id}\t${attendance_date}\t${login_time || ''}\t${status || ''}\t${recorded_by}\t${recorded_at}\n`;
+    const logEntry = `${id || ''}\t${student_id}\t${subject_id}\t${class_subject_id || ''}\t${section_id}\t${attendance_date}\t${login_time || ''}\t${status || ''}\t${recorded_by}\n`;
     
     // 🚀 OPTIMIZATION: Use async append instead of blocking read+write
     fs.appendFile(LOGS_FILE, logEntry, (err) => {
@@ -1139,8 +1139,7 @@ export async function recordAttendance(studentId, subjectId, sectionId, teacherI
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE 
         login_time = VALUES(login_time),
-        status = VALUES(status),
-        recorded_at = CURRENT_TIMESTAMP
+        status = VALUES(status)
     `;
 
     const result = await executeQuery(query, [studentId, subId, secId, today, loginTime, status, teachId]);
@@ -1173,8 +1172,8 @@ export async function recordAttendance(studentId, subjectId, sectionId, teacherI
       attendance_date: today,
       login_time: loginTime,
       status: status,
-      recorded_by: teachId,
-      recorded_at: nowTimestamp
+      recorded_by: teachId
+      
     }, action);
 
     console.log(`✅ Attendance recorded for student ${studentId} at ${loginTime} - Status: ${status}`);
