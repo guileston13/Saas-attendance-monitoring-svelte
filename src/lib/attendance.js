@@ -74,8 +74,8 @@ export function generateSchoolDays(year, month, weekdaysPattern = null) {
 			// Filter by specific weekday pattern
 			includeDay = matchesWeekdayPattern(date, weekdaysPattern);
 		} else {
-			// Default: exclude weekends only
-			includeDay = dayOfWeek !== 0 && dayOfWeek !== 6;
+			// Default: exclude Sunday only (include Monday-Saturday)
+			includeDay = dayOfWeek !== 0;
 		}
 		
 		if (includeDay) {
