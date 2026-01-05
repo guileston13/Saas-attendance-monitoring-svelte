@@ -26,6 +26,7 @@
 			window.removeEventListener('scroll', handleScroll);
 		};
 	});
+console.log('Page data:', data.sections);
 </script>
 
 <svelte:head>
@@ -137,7 +138,7 @@
 							{#each sections.slice(0, 5) as section}
 								<tr>
 									<td>{section.SectionName}</td>
-									<td>{section.StudentCount || 0}</td>
+									<td>{section.TotalStudents || 0}</td>
 								</tr>
 							{:else}
 								<tr><td colspan="2" class="text-center">No sections found</td></tr>

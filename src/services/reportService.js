@@ -219,6 +219,11 @@ export async function getAttendanceReportData(sectionId, subjectId, startDate, e
         
         // Fill in attendance data - Late is considered present
         attendanceRecords.forEach(record => {
+              // 🚨 Skip records not in enrollment list
+                if (!attendanceData[record.StudentID]) {
+                    console.warn('Attendance record without active enrollment:', record.StudentID);
+                    return;
+                }
             const dateStr = formatDateString(record.attendance_date);
             
             let status = 'absent';

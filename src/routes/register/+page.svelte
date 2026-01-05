@@ -9,7 +9,10 @@
 	let loading = false;
 	
 	const yearLevels = [
-		'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+		'1st Year',
+		'2nd Year',
+		'3rd Year',
+		'4th Year'
 	];
 </script>
 
