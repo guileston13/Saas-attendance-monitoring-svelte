@@ -350,7 +350,7 @@
 		let consecutiveCount = 0;
 		for (let i = currentIndex; i >= 0 && consecutiveCount < count; i--) {
 			const status = attendanceData[studentId][calendarDays[i].date];
-			if (status === 'absent') {
+			if (status === 'absent' || status === 'late') {
 				consecutiveCount++;
 			} else {
 				break; // Stop if we hit a non-absent status
@@ -371,15 +371,16 @@
 
 	// Count attendance statistics
 	function getAttendanceStats(studentId) {
-		if (!attendanceData[studentId]) return { present: 0, absent: 0, noRecord: 0, dropped: 0, total: 0 };
+		if (!attendanceData[studentId]) return { present: 0, absent: 0, late: 0, noRecord: 0, dropped: 0, total: 0 };
 		
 		const records = Object.values(attendanceData[studentId]);
-		const present = records.filter(status => status === 'present' || status === 'late').length;
+		const present = records.filter(status => status === 'present').length;
 		const absent = records.filter(status => status === 'absent').length;
+		const late = records.filter(status => status === 'late').length;
 		const noRecord = records.filter(status => status === 'no-record').length;
 		const dropped = records.filter(status => status === 'drop').length;
 		
-		return { present, absent, noRecord, dropped, total: records.length };
+		return { present, absent, late, noRecord, dropped, total: records.length };
 	}
 	
 	onMount(() => {
@@ -607,6 +608,11 @@
 							<span class="legend-icon drop">💣</span>
 							<span>Dropped</span>
 						</div>
+						<div class="legend-item">
+							<span class="legend-icon late">⏰</span>
+							<span>Late</span>
+						</div>
+						
 					</div>
 
 					<!-- Attendance Table -->
@@ -670,13 +676,14 @@
 										<td class="stats-cell">
 											<div class="student-stats">
 												<span class="present-count">✅ {stats.present}</span>
-												<span class="absent-count">❌ {stats.absent}</span>
+												<span class="absent-count">❌ {stats.absent + Math.floor(stats.late / 3)}</span>
+												<span class="late-count">⏰ {stats.late}</span>
 												{#if stats.dropped > 0}
 													<span class="dropped-count">💣 {stats.dropped}</span>
 												{/if}
-												<span class="percentage">
+												<!-- <span class="percentage">
 													{stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0}%
-												</span>
+												</span> -->
 											</div>
 										</td>
 									</tr>
